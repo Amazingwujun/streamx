@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: streamx-broker
+  profiles:
+    active: dev

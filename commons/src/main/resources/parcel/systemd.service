@@ -1,0 +1,12 @@
+[Unit]
+Description=The %s server
+After=syslog.target
+
+[Service]
+LimitNOFILE=65535
+Environment=PATH=%s/jdk-%s/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+ExecStart=%s/%s/%s.jar --spring.profiles.active=prod
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
