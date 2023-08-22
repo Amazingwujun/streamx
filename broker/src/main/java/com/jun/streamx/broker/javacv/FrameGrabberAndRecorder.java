@@ -1,11 +1,15 @@
-package com.jun.streamx.broker;
+package com.jun.streamx.broker.javacv;
 
 
+import com.jun.streamx.broker.constants.ProtocolEnum;
+import com.jun.streamx.broker.server.HttpOrWebSocketChooser;
 import com.jun.streamx.commons.exception.StreamxException;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.bytedeco.ffmpeg.global.avcodec;
@@ -14,7 +18,9 @@ import org.bytedeco.javacv.*;
 import org.springframework.util.Assert;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 流数据采集和分发
@@ -29,6 +35,8 @@ public class FrameGrabberAndRecorder implements Runnable {
         avutil.av_log_set_level(avutil.AV_LOG_ERROR);
         FFmpegLogCallback.set();
     }
+
+    public static final Map<String, FrameGrabberAndRecorder> CACHE = new ConcurrentHashMap<>();
 
     //@formatter:off
 
@@ -114,10 +122,16 @@ public class FrameGrabberAndRecorder implements Runnable {
         // 开始
         long startAt = 0;
         long channelGroupEmptyAt = Long.MAX_VALUE;
+        long emptyFrameCount = 0;
         while (runningStatus) {
             try {
                 var frame = grabber.grab();
-                if (frame != null) {
+                if (frame != null) { // 我们只要 video
+                    if (frame.type != Frame.Type.VIDEO) {
+                        // 跳过其它帧，主要是声音
+                        continue;
+                    }
+                    emptyFrameCount = 0;
                     if (startAt == 0) {
                         startAt = System.currentTimeMillis();
                     }
@@ -126,6 +140,13 @@ public class FrameGrabberAndRecorder implements Runnable {
                         recorder.setTimestamp(videoTS);
                     }
                     recorder.record(frame);
+                } else {
+                    emptyFrameCount++;
+                    if (emptyFrameCount >= 5) {
+                        // 连续出现五个空帧
+                        log.warn("Stream[{}] 连续出现五个空帧", streamUrl);
+                        break;
+                    }
                 }
 
                 if (bos.size() > 0) {
@@ -139,14 +160,19 @@ public class FrameGrabberAndRecorder implements Runnable {
                         }
 
                         if (autoCloseAfter > 0 && System.currentTimeMillis() - pre > autoCloseAfter) {
-                            runningStatus = false;
                             log.warn("[{}] 待推流 channels 为空，自动关闭当前推流拉流任务", streamUrl);
+                            break;
                         }
                     } else {
                         channelGroupEmptyAt = Long.MAX_VALUE;
 
                         // 开始分发
-                        channelGroup.writeAndFlush(Unpooled.wrappedBuffer(data));
+                        channelGroup.forEach(channel -> {
+                            switch (protocol(channel)) {
+                                case ws, wss -> channel.writeAndFlush(new BinaryWebSocketFrame(Unpooled.wrappedBuffer(data)));
+                                case http, https -> channel.writeAndFlush(Unpooled.wrappedBuffer(data));
+                            }
+                        });
                     }
                 }
             } catch (Exception e) {
@@ -154,6 +180,9 @@ public class FrameGrabberAndRecorder implements Runnable {
                 break;
             }
         }
+
+        // 推流结束, 关闭全部客户端
+        channelGroup.close();
 
         // 运行状态统统改为 false
         runningStatus = false;
@@ -163,7 +192,7 @@ public class FrameGrabberAndRecorder implements Runnable {
             grabber.close();
             recorder.close();
         } catch (FrameGrabber.Exception | FrameRecorder.Exception e) {
-            log.error(e.getMessage(), e);
+            log.error("资源关闭失败: " + e.getMessage(), e);
         }
     }
 
@@ -180,12 +209,8 @@ public class FrameGrabberAndRecorder implements Runnable {
         grabber.setOption("buffer_size", "1024000");
 
         // rtsp 流处理
-        if (streamUrl.startsWith("rtsp")) {
-            // 设置打开协议 tcp
-            grabber.setOption("rtsp_transport", "tcp");
-            //设置超时时间
-            grabber.setOption("stimeout", "3000000");
-        }
+        // 设置打开协议 tcp
+        grabber.setOption("rtsp_transport", "tcp");
 
         try {
             grabber.start();
@@ -226,5 +251,15 @@ public class FrameGrabberAndRecorder implements Runnable {
             this.runningStatus = false;
             throw new StreamxException(e);
         }
+    }
+
+    /**
+     * 获取当前 channel 的 protocol
+     *
+     * @param channel {@link Channel}
+     * @return ProtocolEnum
+     */
+    private ProtocolEnum protocol(Channel channel){
+        return (ProtocolEnum) channel.attr(AttributeKey.valueOf(HttpOrWebSocketChooser.PROTOCOL)).get();
     }
 }

@@ -7,6 +7,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.cors.CorsConfigBuilder;
 import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
@@ -23,10 +24,13 @@ import javax.annotation.PostConstruct;
 @Component
 public class HttpServerInitializer {
 
-    private final FlvHandler flvHandler;
+    private final HttpFlvHandler httpFlvHandler;
+    private final WebSocketFlvHandler webSocketFlvHandler;
 
-    public HttpServerInitializer(FlvHandler flvHandler) {
-        this.flvHandler = flvHandler;
+    public HttpServerInitializer(HttpFlvHandler httpFlvHandler,
+                                 WebSocketFlvHandler webSocketFlvHandler) {
+        this.httpFlvHandler = httpFlvHandler;
+        this.webSocketFlvHandler = webSocketFlvHandler;
     }
 
     @PostConstruct
@@ -42,12 +46,11 @@ public class HttpServerInitializer {
                         .build();
                 var p = socketChannel.pipeline();
                 p
-                        .addLast(new HttpResponseEncoder())
-                        .addLast(new HttpRequestDecoder())
+                        .addLast(new HttpServerCodec())
                         .addLast(new ChunkedWriteHandler())
                         .addLast(new HttpObjectAggregator(64 * 1024))
                         .addLast(new CorsHandler(corsConfig))
-                        .addLast(flvHandler);
+                        .addLast(new HttpOrWebSocketChooser(httpFlvHandler, webSocketFlvHandler));
             }
         }, serverProperties);
         httpServer.start();

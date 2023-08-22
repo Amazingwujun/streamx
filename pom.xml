@@ -40,53 +40,22 @@
                 <artifactId>javacv</artifactId>
                 <version>${javacv.version}</version>
             </dependency>
+
+            <dependency>
+                <groupId>org.bytedeco</groupId>
+                <artifactId>ffmpeg</artifactId>
+                <version>${ffmpeg.version}</version>
+                <classifier>linux-x86_64</classifier>
+            </dependency>
+
+            <dependency>
+                <groupId>org.bytedeco</groupId>
+                <artifactId>ffmpeg</artifactId>
+                <version>${ffmpeg.version}</version>
+                <classifier>windows-x86_64</classifier>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
-    <profiles>
-        <profile>
-            <id>windows-x86_64</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <dependencyManagement>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.bytedeco</groupId>
-                        <artifactId>ffmpeg</artifactId>
-                        <version>${ffmpeg.version}</version>
-                        <classifier>linux-x86_64</classifier>
-                    </dependency>
-
-                    <dependency>
-                        <groupId>org.bytedeco</groupId>
-                        <artifactId>ffmpeg</artifactId>
-                        <version>${ffmpeg.version}</version>
-                        <classifier>windows-x86_64</classifier>
-                    </dependency>
-                </dependencies>
-            </dependencyManagement>
-        </profile>
-        <profile>
-            <id>linux-x86_64</id>
-            <dependencyManagement>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.bytedeco</groupId>
-                        <artifactId>ffmpeg</artifactId>
-                        <version>${ffmpeg.version}</version>
-                        <classifier>linux-x86_64</classifier>
-                    </dependency>
-
-                    <dependency>
-                        <groupId>org.bytedeco</groupId>
-                        <artifactId>ffmpeg</artifactId>
-                        <version>${ffmpeg.version}</version>
-                        <classifier>windows-x86_64</classifier>
-                    </dependency>
-                </dependencies>
-            </dependencyManagement>
-        </profile>
-    </profiles>
 
 </project>

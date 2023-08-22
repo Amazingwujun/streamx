@@ -1,6 +1,6 @@
 package com.jun.streamx.broker.server;
 
-import com.jun.streamx.broker.FrameGrabberAndRecorder;
+import com.jun.streamx.broker.javacv.FrameGrabberAndRecorder;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
@@ -9,8 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_0;
@@ -25,10 +23,9 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 @Slf4j
 @Component
 @ChannelHandler.Sharable
-public class FlvHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
+public class HttpFlvHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private FullHttpRequest request;
-    private final Map<String, FrameGrabberAndRecorder> cache = new ConcurrentHashMap<>();
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -54,7 +51,7 @@ public class FlvHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                 .set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
         ctx.writeAndFlush(resp);
 
-        var grabberAndRecorder = cache.computeIfAbsent(streamUrl, k -> new FrameGrabberAndRecorder(streamUrl));
+        var grabberAndRecorder = FrameGrabberAndRecorder.CACHE.computeIfAbsent(streamUrl, k -> new FrameGrabberAndRecorder(streamUrl));
         grabberAndRecorder.start();
         grabberAndRecorder.future().thenAccept(flvHeaders -> {
             ctx.writeAndFlush(Unpooled.wrappedBuffer(flvHeaders)).addListener(f -> {
@@ -68,19 +65,14 @@ public class FlvHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        super.channelInactive(ctx);
+    public void channelInactive(ChannelHandlerContext ctx) {
         log.info("channel[{}] inactive", ctx.channel().id());
     }
 
     @Override
-    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-        super.userEventTriggered(ctx, evt);
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        super.exceptionCaught(ctx, cause);
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        log.error(cause.getMessage(), cause);
+        ctx.close();
     }
 
     private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
