@@ -40,31 +40,8 @@
                 <artifactId>javacv</artifactId>
                 <version>${javacv.version}</version>
             </dependency>
-
-<!--            <dependency>-->
-<!--                <groupId>org.bytedeco</groupId>-->
-<!--                <artifactId>ffmpeg</artifactId>-->
-<!--                <version>${ffmpeg.version}</version>-->
-<!--                <classifier>linux-x86_64</classifier>-->
-<!--            </dependency>-->
-
-<!--            <dependency>-->
-<!--                <groupId>org.bytedeco</groupId>-->
-<!--                <artifactId>ffmpeg</artifactId>-->
-<!--                <version>${ffmpeg.version}</version>-->
-<!--                <classifier>windows-x86_64</classifier>-->
-<!--            </dependency>-->
         </dependencies>
     </dependencyManagement>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 
     <profiles>
         <profile>

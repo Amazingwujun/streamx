@@ -1,5 +1,6 @@
 package com.jun.streamx.broker;
 
+import lombok.ToString;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -11,22 +12,18 @@ class BrokerApplicationTests {
 
     @Test
     void contextLoads() throws InterruptedException {
-        var f = new CompletableFuture<String>();
-        f.orTimeout(3, TimeUnit.SECONDS);
-
-        try {
-            TimeUnit.SECONDS.sleep(4);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        f.complete("nani");
-        f.whenComplete((r, t) -> {
-
-            t.printStackTrace();
-        });
-
-
-        TimeUnit.HOURS.sleep(1);
+        System.out.println(new NET_DVR_PDC_ALRAM_INFO());
     }
 
+    @ToString
+    static class NET_DVR_PDC_ALRAM_INFO   {
+        public int dwSize;
+        public byte byMode;
+        public byte byChannel;
+        public byte bySmart;
+        public byte byRes1;
+        public int dwLeaveNum;
+        public int dwEnterNum;
+        public byte[] byRes2 = new byte[40];
+    }
 }

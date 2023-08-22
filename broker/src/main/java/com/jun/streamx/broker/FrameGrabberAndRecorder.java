@@ -1,5 +1,7 @@
 package com.jun.streamx.broker;
 
+
+import com.jun.streamx.commons.exception.StreamxException;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.group.ChannelGroup;
@@ -10,11 +12,8 @@ import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.*;
 import org.springframework.util.Assert;
-import org.springframework.util.StopWatch;
 
 import java.io.ByteArrayOutputStream;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -27,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
 public class FrameGrabberAndRecorder implements Runnable {
 
     static {
-        avutil.av_log_set_level(avutil.AV_LOG_INFO);
+        avutil.av_log_set_level(avutil.AV_LOG_ERROR);
         FFmpegLogCallback.set();
     }
 
@@ -52,8 +51,6 @@ public class FrameGrabberAndRecorder implements Runnable {
 
     /** 当流为空时自动关比，单位 */
     private final int autoCloseAfter;
-
-    private final BlockingQueue<Frame> queue = new ArrayBlockingQueue<>(10_000);
 
     //@formatter:on
 
@@ -174,6 +171,7 @@ public class FrameGrabberAndRecorder implements Runnable {
     private void buildGrabber() {
         this.grabber = new FFmpegFrameGrabber(streamUrl);
 
+        grabber.setOption("timeout", String.valueOf(5 * 1_000_000));
         grabber.setOption("stimoout", "15000000");
         grabber.setOption("threads", "1");
         grabber.setPixelFormat(avutil.AV_PIX_FMT_YUV420P);
@@ -195,6 +193,7 @@ public class FrameGrabberAndRecorder implements Runnable {
             log.error("grabber start failed: " + e.getMessage(), e);
             future.completeExceptionally(e);
             this.runningStatus = false;
+            throw new StreamxException(e);
         }
     }
 
@@ -225,6 +224,7 @@ public class FrameGrabberAndRecorder implements Runnable {
             log.error("recorder start failed: " + e.getMessage(), e);
             future.completeExceptionally(e);
             this.runningStatus = false;
+            throw new StreamxException(e);
         }
     }
 }
