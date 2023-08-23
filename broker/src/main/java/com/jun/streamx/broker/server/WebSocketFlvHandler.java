@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 public class WebSocketFlvHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
 
     @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+    public void channelActive(ChannelHandlerContext ctx) {
         log.info("channel[{}] active", ctx.channel().id());
 
         var streamUrl = (String) ctx.channel()
