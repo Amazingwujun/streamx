@@ -21,14 +21,14 @@ import java.net.URI;
  * @author Jun
  * @since 1.0.0
  */
-public class HttpOrWebSocketChooser extends SimpleChannelInboundHandler<FullHttpRequest> {
+public class ProtocolDispatchHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     public static final String PROTOCOL = "protocol";
     public static final String STREAM_URL_KEY = "stream-url";
     private final HttpFlvHandler httpFlvHandler;
     private final WebSocketFlvHandler webSocketFlvHandler;
 
-    public HttpOrWebSocketChooser(HttpFlvHandler httpFlvHandler, WebSocketFlvHandler webSocketFlvHandler) {
+    public ProtocolDispatchHandler(HttpFlvHandler httpFlvHandler, WebSocketFlvHandler webSocketFlvHandler) {
         this.httpFlvHandler = httpFlvHandler;
         this.webSocketFlvHandler = webSocketFlvHandler;
     }
@@ -36,15 +36,17 @@ public class HttpOrWebSocketChooser extends SimpleChannelInboundHandler<FullHttp
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) {
         var headers = msg.headers();
+
+        // 抓取 stream url 并置入 channel
+        String uri = msg.uri();
+        String query = URI.create(uri).getQuery();
+        String streamUrl = query.split("=")[1];
+        ctx.channel().attr(AttributeKey.valueOf(STREAM_URL_KEY)).set(streamUrl);
+
+        // websocket 与 http 协议处理
         if (isWebsocketUpgrade(headers)) {
             // 协议内容置入
             ctx.channel().attr(AttributeKey.valueOf(PROTOCOL)).set(ProtocolEnum.ws);
-
-            // 抓取 stream url
-            String uri = msg.uri();
-            String query = URI.create(uri).getQuery();
-            String streamUrl = query.split("=")[1];
-            ctx.channel().attr(AttributeKey.valueOf(STREAM_URL_KEY)).set(streamUrl);
 
             // ctx 切换
             var p = ctx.pipeline();

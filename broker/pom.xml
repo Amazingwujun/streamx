@@ -19,6 +19,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
         </dependency>
@@ -26,20 +32,6 @@
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>javacv</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>ffmpeg</artifactId>
-            <version>${ffmpeg.version}</version>
-            <classifier>linux-x86_64</classifier>
-        </dependency>
-
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>ffmpeg</artifactId>
-            <version>${ffmpeg.version}</version>
-            <classifier>windows-x86_64</classifier>
         </dependency>
 
         <dependency>
@@ -55,6 +47,7 @@
     </dependencies>
 
     <build>
+        <finalName>streamx-${name}-${streamx.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

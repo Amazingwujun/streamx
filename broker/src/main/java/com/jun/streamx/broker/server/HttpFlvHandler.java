@@ -1,14 +1,13 @@
 package com.jun.streamx.broker.server;
 
-import com.jun.streamx.broker.javacv.FrameGrabberAndRecorder;
+import com.jun.streamx.broker.javacv.FrameGrabAndRecordManager;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
+import io.netty.util.AttributeKey;
 import io.netty.util.CharsetUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
-import java.net.URI;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_0;
@@ -33,7 +32,7 @@ public class HttpFlvHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
         this.request = request;
         if (!request.decoderResult().isSuccess()) {
             sendError(ctx, BAD_REQUEST);
@@ -41,22 +40,21 @@ public class HttpFlvHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         }
 
         // 抓取stream url
-        String uri = request.uri();
-        String query = URI.create(uri).getQuery();
-        String streamUrl = query.split("=")[1];
+        String streamUrl = (String) ctx.channel().attr(AttributeKey.valueOf(ProtocolDispatchHandler.STREAM_URL_KEY)).get();
 
+        // response
         var resp = new DefaultHttpResponse(HTTP_1_1, HttpResponseStatus.OK);
         resp.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, "video/x-flv")
                 .set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
         ctx.writeAndFlush(resp);
 
-        var grabberAndRecorder = FrameGrabberAndRecorder.CACHE.computeIfAbsent(streamUrl, k -> new FrameGrabberAndRecorder(streamUrl));
-        grabberAndRecorder.start();
-        grabberAndRecorder.future().thenAccept(flvHeaders -> {
+        // start
+        var manager = FrameGrabAndRecordManager.CACHE.computeIfAbsent(streamUrl, k -> new FrameGrabAndRecordManager(streamUrl, 10_000));
+        manager.start().thenAccept(flvHeaders -> {
             ctx.writeAndFlush(Unpooled.wrappedBuffer(flvHeaders)).addListener(f -> {
                 if (f.isSuccess()) {
-                    grabberAndRecorder.addReceiver(ctx.channel());
+                    manager.addReceiver(ctx.channel());
                 } else {
                     log.warn("flv headers 发送失败", f.cause());
                 }

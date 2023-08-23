@@ -2,7 +2,7 @@ package com.jun.streamx.broker.javacv;
 
 
 import com.jun.streamx.broker.constants.ProtocolEnum;
-import com.jun.streamx.broker.server.HttpOrWebSocketChooser;
+import com.jun.streamx.broker.server.ProtocolDispatchHandler;
 import com.jun.streamx.commons.exception.StreamxException;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -18,6 +18,7 @@ import org.bytedeco.javacv.*;
 import org.springframework.util.Assert;
 
 import java.io.ByteArrayOutputStream;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,14 +30,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 1.0.0
  */
 @Slf4j
-public class FrameGrabberAndRecorder implements Runnable {
+public class FrameGrabAndRecordManager implements Runnable {
 
     static {
         avutil.av_log_set_level(avutil.AV_LOG_ERROR);
         FFmpegLogCallback.set();
     }
 
-    public static final Map<String, FrameGrabberAndRecorder> CACHE = new ConcurrentHashMap<>();
+    public static final Map<String, FrameGrabAndRecordManager> CACHE = new ConcurrentHashMap<>();
 
     //@formatter:off
 
@@ -47,47 +48,42 @@ public class FrameGrabberAndRecorder implements Runnable {
 
     /** 含第一个 video 关键帧 */
     private byte[] flvHeaders;
-
     /** 流地址 */
     private final String streamUrl;
-
     private final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-
     private CompletableFuture<byte[]> future;
-
     private final ChannelGroup channelGroup;
-
     private volatile boolean runningStatus;
-
-    /** 当流为空时自动关比，单位 */
-    private final int autoCloseAfter;
+    private final long keepAliveAfterGroupEmpty;
 
     //@formatter:on
 
-    public FrameGrabberAndRecorder(String streamUrl) {
-        this(streamUrl, 10_000);
+    public FrameGrabAndRecordManager(String streamUrl) {
+        this(streamUrl, Duration.ofMinutes(1).toMillis());
     }
 
     /**
      * 构建推流拉流对象
      *
      * @param streamUrl      流地址
-     * @param autoCloseAfter 流关闭时间，当待推送 channel 为空
+     * @param keepAliveAfterGroupEmpty 当 channelGroup 为空时，保持拉流状态的时间.
+     *                                 单位毫秒. 当该参数 < 0 时，拉流状态将一直保持。
      */
-    public FrameGrabberAndRecorder(String streamUrl, int autoCloseAfter) {
+    public FrameGrabAndRecordManager(String streamUrl, long keepAliveAfterGroupEmpty) {
         Assert.hasText(streamUrl, "streamUrl 不能为空");
 
         this.streamUrl = streamUrl;
-        this.autoCloseAfter = autoCloseAfter;
+        this.keepAliveAfterGroupEmpty = keepAliveAfterGroupEmpty;
         this.channelGroup = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
     }
 
-    public void start() {
+    public CompletableFuture<byte[]> start() {
         if (!this.runningStatus) {
             this.runningStatus = true;
             this.future = new CompletableFuture<>();
             new Thread(this).start();
         }
+        return future;
     }
 
     public void stop() {
@@ -157,7 +153,7 @@ public class FrameGrabberAndRecorder implements Runnable {
                             channelGroupEmptyAt = System.currentTimeMillis();
                         }
 
-                        if (autoCloseAfter > 0 && System.currentTimeMillis() - pre > autoCloseAfter) {
+                        if (keepAliveAfterGroupEmpty > 0 && System.currentTimeMillis() - pre > keepAliveAfterGroupEmpty) {
                             log.warn("[{}] 待推流 channels 为空，自动关闭当前推流拉流任务", streamUrl);
                             break;
                         }
@@ -232,8 +228,6 @@ public class FrameGrabberAndRecorder implements Runnable {
                 grabber.getImageHeight(),
                 grabber.getAudioChannels());
         recorder.setFormat("flv");
-        recorder.setVideoCodec(avcodec.AV_CODEC_ID_H264);
-
         recorder.setInterleaved(false);
         recorder.setVideoOption("tune", "zerolatency");
         recorder.setVideoOption("preset", "ultrafast");
@@ -264,6 +258,6 @@ public class FrameGrabberAndRecorder implements Runnable {
      * @return ProtocolEnum
      */
     private ProtocolEnum protocol(Channel channel) {
-        return (ProtocolEnum) channel.attr(AttributeKey.valueOf(HttpOrWebSocketChooser.PROTOCOL)).get();
+        return (ProtocolEnum) channel.attr(AttributeKey.valueOf(ProtocolDispatchHandler.PROTOCOL)).get();
     }
 }

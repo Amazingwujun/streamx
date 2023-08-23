@@ -1,6 +1,6 @@
 package com.jun.streamx.broker.server;
 
-import com.jun.streamx.broker.javacv.FrameGrabberAndRecorder;
+import com.jun.streamx.broker.javacv.FrameGrabAndRecordManager;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -26,15 +26,16 @@ public class WebSocketFlvHandler extends SimpleChannelInboundHandler<WebSocketFr
     public void channelActive(ChannelHandlerContext ctx) {
         log.info("channel[{}] active", ctx.channel().id());
 
+        // streamUrl 获取
         var streamUrl = (String) ctx.channel()
-                .attr(AttributeKey.valueOf(HttpOrWebSocketChooser.STREAM_URL_KEY)).get();
+                .attr(AttributeKey.valueOf(ProtocolDispatchHandler.STREAM_URL_KEY)).get();
 
-        var grabberAndRecorder = FrameGrabberAndRecorder.CACHE.computeIfAbsent(streamUrl, k -> new FrameGrabberAndRecorder(streamUrl));
-        grabberAndRecorder.start();
-        grabberAndRecorder.future().thenAccept(flvHeaders -> {
+        // start
+        var manager = FrameGrabAndRecordManager.CACHE.computeIfAbsent(streamUrl, k -> new FrameGrabAndRecordManager(streamUrl));
+        manager.start().thenAccept(flvHeaders -> {
             ctx.writeAndFlush(new BinaryWebSocketFrame(Unpooled.wrappedBuffer(flvHeaders))).addListener(f -> {
                 if (f.isSuccess()) {
-                    grabberAndRecorder.addReceiver(ctx.channel());
+                    manager.addReceiver(ctx.channel());
                 } else {
                     log.warn("flv headers 发送失败", f.cause());
                     ctx.close();
