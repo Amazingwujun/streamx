@@ -9,6 +9,14 @@ if [ ${exist_jar} != $final_jar ]; then
 fi
 chmod +x ./${final_jar}
 systemctl restart $service_name
-echo "$service_name 重启完成, 三秒后打印日志"
-sleep 3
-tail -f -n 5 ./logs/${service_name}.log
+
+# 打印日志
+log_file_path="./logs/${service_name}.log"
+if [ -f ${log_file_path} ]; then
+        echo "$service_name 重启完成, 打印日志"
+        tail -f -n 5 ./logs/${service_name}.log
+else
+        echo "$service_name 重启完成, 三秒后打印日志"
+        sleep 3
+        tail -f -n 5 ./logs/${service_name}.log
+fi
