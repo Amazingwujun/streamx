@@ -16,7 +16,7 @@ public class BizProperties {
     //@formatter:off
 
     /** http,ws 端口 */
-    private int port = 8988;
+    private int port = 1989;
 
     /** websocket path */
     private String webSocketPath = "/live";
