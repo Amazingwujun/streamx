@@ -36,11 +36,15 @@ public class FrameGrabAndRecordManager implements Runnable {
         FFmpegLogCallback.set();
     }
 
+    public static final String RTSP_PROTOCOL = "rtsp";
+    public static final String RTMP_PROTOCOL = "rtmp";
     public static final Map<String, FrameGrabAndRecordManager> CACHE = new ConcurrentHashMap<>();
 
     //@formatter:off
 
     private static final int MAX_EMPTY_PACKET_SIZE = 5;
+    /** 单位是 us */
+    private static final int TIMEOUT = 5_000_000;
 
     private FFmpegFrameGrabber grabber;
     private FFmpegFrameRecorder recorder;
@@ -204,12 +208,10 @@ public class FrameGrabAndRecordManager implements Runnable {
         stopAndRelease();
     }
 
-
     private void buildGrabber() {
         this.grabber = new FFmpegFrameGrabber(streamUrl);
 
-        grabber.setOption("timeout", String.valueOf(5 * 1_000_000));
-        grabber.setOption("stimoout", "15000000");
+        grabber.setOption("stimoout", String.valueOf(TIMEOUT));
         grabber.setOption("threads", "1");
         grabber.setPixelFormat(avutil.AV_PIX_FMT_YUV420P);
 
@@ -218,7 +220,10 @@ public class FrameGrabAndRecordManager implements Runnable {
 
         // rtsp 流处理
         // 设置打开协议 tcp
-        grabber.setOption("rtsp_transport", "tcp");
+        if (streamUrl.startsWith(RTSP_PROTOCOL)) {
+            grabber.setOption("timeout", String.valueOf(TIMEOUT)); // rtmp 不支持此参数
+            grabber.setOption("rtsp_transport", "tcp");
+        }
 
         try {
             grabber.start();
@@ -237,7 +242,7 @@ public class FrameGrabAndRecordManager implements Runnable {
                 grabber.getAudioChannels());
         recorder.setFormat("flv");
         /*
-            没有这个配置，会导致 flv.js 播放延迟 10 秒左右。
+            没有这个配置，会导致视屏流延迟 10 秒左右。
             具体原因我没找到，github 上有人提到过这个 issue: https://github.com/bytedeco/javacv/issues/718
          */
         recorder.setInterleaved(false);
