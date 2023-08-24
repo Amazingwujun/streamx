@@ -104,7 +104,6 @@ public class FrameGrabAndRecordManager implements Runnable {
         try {
             grabber.close();
         } catch (FrameGrabber.Exception e) {
-            log.error("资源关闭失败: " + e.getMessage(), e);
             log.error("grabber 关闭失败: " + e.getMessage(), e);
         }
         try {

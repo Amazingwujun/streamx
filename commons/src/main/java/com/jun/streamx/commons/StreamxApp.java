@@ -20,11 +20,9 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.*;
 
 /**
- * 应用启动类, 该类提供两个功能
- * <ol>
- *    <li>自动生成可执行脚本，通过执行 {@code java -jar application.jar --parcel={app package path} {--spring.application.name=app-name}}.</li>
- *    <li>打印当前项目 http 协议接口资源树, 启动应用时加入参数 {@code --res-tree}.</li>
- * </ol>
+ * 应用启动类.
+ * <p>
+ * 自动生成可执行脚本，通过执行 {@code java -jar application.jar --parcel={app package path} {--spring.application.name=app-name}}.
  *
  * @author Jun
  * @since 1.0.0
