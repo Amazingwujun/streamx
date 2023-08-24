@@ -2,8 +2,8 @@ package com.jun.streamx.broker.javacv;
 
 
 import com.jun.streamx.broker.constants.ProtocolEnum;
+import com.jun.streamx.broker.exception.GrabberOrRecorderBuildException;
 import com.jun.streamx.broker.server.ProtocolDispatchHandler;
-import com.jun.streamx.commons.exception.StreamxException;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.group.ChannelGroup;
@@ -12,7 +12,6 @@ import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
-import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.*;
 import org.springframework.util.Assert;
@@ -65,7 +64,7 @@ public class FrameGrabAndRecordManager implements Runnable {
     /**
      * 构建推流拉流对象
      *
-     * @param streamUrl      流地址
+     * @param streamUrl                流地址
      * @param keepAliveAfterGroupEmpty 当 channelGroup 为空时，保持拉流状态的时间.
      *                                 单位毫秒. 当该参数 < 0 时，拉流状态将一直保持。
      */
@@ -90,6 +89,27 @@ public class FrameGrabAndRecordManager implements Runnable {
         this.runningStatus = false;
     }
 
+    private void stopAndRelease() {
+        // 推流结束, 关闭全部客户端
+        channelGroup.close();
+
+        // 运行状态统统改为 false
+        runningStatus = false;
+
+        // 关闭相关资源
+        try {
+            grabber.close();
+        } catch (FrameGrabber.Exception e) {
+            log.error("资源关闭失败: " + e.getMessage(), e);
+            log.error("grabber 关闭失败: " + e.getMessage(), e);
+        }
+        try {
+            recorder.close();
+        } catch (FrameRecorder.Exception e) {
+            log.error("recorder 关闭失败: " + e.getMessage(), e);
+        }
+    }
+
     public void addReceiver(Channel channel) {
         channelGroup.add(channel);
     }
@@ -107,7 +127,12 @@ public class FrameGrabAndRecordManager implements Runnable {
             // 清空缓存
             grabber.flush();
         } catch (FrameGrabber.Exception e) {
-            throw new RuntimeException("grabber 缓存清理失败");
+            log.error("grabber flush failed: " + e.getMessage(), e);
+
+            // 停止现成并释放资源
+            stopAndRelease();
+
+            return;
         }
 
         // flv header + video tag1
@@ -176,24 +201,7 @@ public class FrameGrabAndRecordManager implements Runnable {
             }
         }
 
-        // 推流结束, 关闭全部客户端
-        channelGroup.close();
-
-        // 运行状态统统改为 false
-        runningStatus = false;
-
-        // 关闭相关资源
-        try {
-            grabber.close();
-        } catch (FrameGrabber.Exception e) {
-            log.error("资源关闭失败: " + e.getMessage(), e);
-            log.error("grabber 关闭失败: " + e.getMessage(), e);
-        }
-        try {
-            recorder.close();
-        } catch (FrameRecorder.Exception e) {
-            log.error("recorder 关闭失败: " + e.getMessage(), e);
-        }
+        stopAndRelease();
     }
 
 
@@ -218,7 +226,7 @@ public class FrameGrabAndRecordManager implements Runnable {
             log.error("grabber start failed: " + e.getMessage(), e);
             future.completeExceptionally(e);
             this.runningStatus = false;
-            throw new StreamxException(e);
+            throw new GrabberOrRecorderBuildException();
         }
     }
 
@@ -228,18 +236,11 @@ public class FrameGrabAndRecordManager implements Runnable {
                 grabber.getImageHeight(),
                 grabber.getAudioChannels());
         recorder.setFormat("flv");
+        /*
+            没有这个配置，会导致 flv.js 播放延迟 10 秒左右。
+            具体原因我没找到，github 上有人提到过这个 issue: https://github.com/bytedeco/javacv/issues/718
+         */
         recorder.setInterleaved(false);
-        recorder.setVideoOption("tune", "zerolatency");
-        recorder.setVideoOption("preset", "ultrafast");
-        recorder.setVideoOption("crf", "26");
-        recorder.setVideoOption("threads", "1");
-        recorder.setFrameRate(25);// 设置帧率
-        recorder.setGopSize(25);// 设置gop,与帧率相同，相当于间隔1秒chan's一个关键帧
-        recorder.setPixelFormat(avutil.AV_PIX_FMT_YUV420P);
-        recorder.setAudioCodec(avcodec.AV_CODEC_ID_AAC);
-        recorder.setOption("keyint_min", "25");    //gop最小间隔
-        recorder.setTrellis(1);
-        recorder.setMaxDelay(0);// 设置延迟
 
         try {
             recorder.start(grabber.getFormatContext());
@@ -247,7 +248,7 @@ public class FrameGrabAndRecordManager implements Runnable {
             log.error("recorder start failed: " + e.getMessage(), e);
             future.completeExceptionally(e);
             this.runningStatus = false;
-            throw new StreamxException(e);
+            throw new GrabberOrRecorderBuildException();
         }
     }
 

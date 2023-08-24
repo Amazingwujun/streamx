@@ -41,6 +41,16 @@ public class WebSocketFlvHandler extends SimpleChannelInboundHandler<WebSocketFr
                     ctx.close();
                 }
             });
+        }).exceptionally(t -> {
+            log.error("Stream[{}] manager start 失败: {}", streamUrl, t.getMessage());
+
+            // 移除 CACHE 中的 manager
+            FrameGrabAndRecordManager.CACHE.remove(streamUrl);
+
+            // 关闭当前连接
+            ctx.close();
+
+            return null;
         });
     }
 

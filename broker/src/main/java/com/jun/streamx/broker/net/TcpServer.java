@@ -34,17 +34,7 @@ public class TcpServer {
      * @param properties         {@link ServerProperties}
      */
     public TcpServer(ChannelInitializer<SocketChannel> channelInitializer, ServerProperties properties) {
-        Assert.notNull(channelInitializer, "channelInitializer can't be null");
-        Assert.notNull(properties, "ServerConfig can't be null");
-        if (Epoll.isAvailable()) {
-            boss = new EpollEventLoopGroup(1);
-            work = new EpollEventLoopGroup();
-        } else {
-            boss = new NioEventLoopGroup(1);
-            work = new NioEventLoopGroup();
-        }
-        this.channelInitializer = channelInitializer;
-        this.config = properties;
+        this(channelInitializer, properties, newEventLoopGroup(1), newEventLoopGroup());
     }
 
     /**
@@ -69,7 +59,15 @@ public class TcpServer {
     /**
      * 获取 EventLoopGroup 实例
      */
-    public static EventLoopGroup newEventLoopGroup() {
+    @SuppressWarnings("SameParameterValue")
+    private static EventLoopGroup newEventLoopGroup(int nThreads) {
+        return Epoll.isAvailable() ? new EpollEventLoopGroup(nThreads) : new NioEventLoopGroup(nThreads);
+    }
+
+    /**
+     * 获取 EventLoopGroup 实例
+     */
+    private static EventLoopGroup newEventLoopGroup() {
         return Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }
 

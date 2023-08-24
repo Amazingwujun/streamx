@@ -27,7 +27,7 @@ public class HttpFlvHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private FullHttpRequest request;
 
     @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+    public void channelActive(ChannelHandlerContext ctx) {
         log.info("channel[{}] active", ctx.channel().id());
     }
 
@@ -59,6 +59,17 @@ public class HttpFlvHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                     log.warn("flv headers 发送失败", f.cause());
                 }
             });
+        }).exceptionally(t -> {
+            log.error("Stream[{}] manager start 失败: {}", streamUrl, t.getMessage());
+
+            // 移除 CACHE 中的 manager
+            FrameGrabAndRecordManager.CACHE.remove(streamUrl);
+
+            // 关闭当前连接
+            ctx.close();
+
+
+            return null;
         });
     }
 
