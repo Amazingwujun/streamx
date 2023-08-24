@@ -26,11 +26,13 @@ public class HttpServerInitializer {
     private final HttpFlvHandler httpFlvHandler;
     private final WebSocketFlvHandler webSocketFlvHandler;
     private final int port;
+    private final BizProperties bizProperties;
 
-    public HttpServerInitializer(BizProperties bp,
+    public HttpServerInitializer(BizProperties bizProperties,
                                  HttpFlvHandler httpFlvHandler,
                                  WebSocketFlvHandler webSocketFlvHandler) {
-        this.port = bp.getPort();
+        this.port = bizProperties.getPort();
+        this.bizProperties = bizProperties;
         this.httpFlvHandler = httpFlvHandler;
         this.webSocketFlvHandler = webSocketFlvHandler;
     }
@@ -52,7 +54,7 @@ public class HttpServerInitializer {
                         .addLast(new ChunkedWriteHandler())
                         .addLast(new HttpObjectAggregator(64 * 1024))
                         .addLast(new CorsHandler(corsConfig))
-                        .addLast(new ProtocolDispatchHandler(httpFlvHandler, webSocketFlvHandler));
+                        .addLast(new ProtocolDispatchHandler(bizProperties, httpFlvHandler, webSocketFlvHandler));
             }
         }, serverProperties);
         httpServer.start();

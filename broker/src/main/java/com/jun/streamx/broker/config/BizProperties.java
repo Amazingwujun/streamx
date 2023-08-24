@@ -1,6 +1,7 @@
 package com.jun.streamx.broker.config;
 
 import lombok.Data;
+import org.bytedeco.tesseract.PAGE_RES_IT;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -16,4 +17,7 @@ public class BizProperties {
 
     /** http,ws 端口 */
     private int port = 8988;
+
+    /** websocket path */
+    private String webSocketPath = "/live";
 }
