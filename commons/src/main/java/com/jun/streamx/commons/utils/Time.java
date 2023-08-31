@@ -115,4 +115,15 @@ public class Time {
     public static LocalDateTime ofEpochMilli(long epochMilli) {
         return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), BEI_JING);
     }
+
+    /**
+     * 由秒级时间戳转为 {@link LocalDateTime}, 时区为 {@link #BEI_JING}.
+     *
+     * @param epochSecond 秒时间戳
+     * @return {@link LocalDateTime}
+     * @see Instant#ofEpochMilli(long)
+     */
+    public static LocalDateTime ofEpochSecond(long epochSecond) {
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochSecond * 1000), BEI_JING);
+    }
 }

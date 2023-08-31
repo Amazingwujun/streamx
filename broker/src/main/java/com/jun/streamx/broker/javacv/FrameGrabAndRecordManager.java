@@ -3,7 +3,7 @@ package com.jun.streamx.broker.javacv;
 
 import com.jun.streamx.broker.constants.ProtocolEnum;
 import com.jun.streamx.broker.exception.GrabberOrRecorderBuildException;
-import com.jun.streamx.broker.server.ProtocolDispatchHandler;
+import com.jun.streamx.broker.handler.ProtocolDispatchHandler;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.group.ChannelGroup;

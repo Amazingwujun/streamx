@@ -1,4 +1,4 @@
-package com.jun.streamx.broker.server;
+package com.jun.streamx.broker.handler;
 
 import com.jun.streamx.broker.javacv.FrameGrabAndRecordManager;
 import io.netty.buffer.Unpooled;
