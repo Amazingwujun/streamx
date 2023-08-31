@@ -23,6 +23,13 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
     protected void channelRead0(ChannelHandlerContext ctx, RtmpMessage msg) {
         try {
             log.info("收到 rtmp 报文: {}", msg);
+            switch (msg.messageType()) {
+                case AMF0_DATA -> {
+
+                }
+                case AUDIO_DATA -> {}
+                case VIDEO_DATA -> {}
+            }
         } finally {
             msg.release();
         }

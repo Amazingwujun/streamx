@@ -35,9 +35,21 @@ class BrokerApplicationTests {
         }, sp).start();
 
         TimeUnit.HOURS.sleep(1);
-
-        var s = "c3 ";
     }
 
 
+    @Test
+    void flv() throws InterruptedException {
+        var sp = new ServerProperties();
+        sp.setPort(1989);
+
+        new TcpServer(new ChannelInitializer<>() {
+            @Override
+            protected void initChannel(SocketChannel ch) {
+                ch.pipeline().addLast(new FlvDecoder());
+            }
+        }, sp).start();
+
+        TimeUnit.HOURS.sleep(1);
+    }
 }

@@ -195,7 +195,7 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
 
                 // 拓展时间戳检查
                 if (tsDelta == 0xffffff) {
-                    if (bufLen < headLen + 12) {
+                    if (bufLen < headLen + 7 + 4) {
                         in.resetReaderIndex();
                         return;
                     }
@@ -225,7 +225,7 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
 
                 // 拓展时间戳检查
                 if (tsDelta == 0xffffff) {
-                    if (bufLen < headLen + 12) {
+                    if (bufLen < headLen + 3 + 4) {
                         in.resetReaderIndex();
                         return;
                     }
