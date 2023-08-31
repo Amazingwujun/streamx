@@ -2,8 +2,6 @@ package com.jun.streamx.broker.entity;
 
 import com.jun.streamx.broker.constants.RtmpMessageType;
 import io.netty.buffer.ByteBuf;
-import io.netty.util.internal.ReflectionUtil;
-import io.netty.util.internal.ResourcesUtil;
 
 /**
  * rtmp 消息.
@@ -41,7 +39,7 @@ public class RtmpMessage {
         return messageType;
     }
 
-    public int payloadLength(){
+    public int payloadLength() {
         return payloadLength;
     }
 

@@ -74,9 +74,30 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
             case READ_HEADER -> decodeChunkHeader(in);
             case READ_BODY -> {
                 var msg = decodeChunkBody(in);
-                if (msg != null) {
-                    out.add(msg);
+                if (msg == null) {
+                    return;
                 }
+
+                // 处理 set chunk size
+                if (RtmpMessageType.SET_CHUNK_SIZE == msg.messageType()) {
+                    // Protocol control message 1, Set Chunk Size, is used to notify the
+                    // peer of a new maximum chunk size.
+                    //
+                    // This field holds the new maximum chunk size,
+                    // in bytes, which will be used for all of the sender’s subsequent
+                    // chunks until further notice. Valid sizes are 1 to 2147483647
+                    // (0x7FFFFFFF) inclusive; however, all sizes greater than 16777215
+                    // (0xFFFFFF) are equivalent since no chunk is larger than one
+                    // message, and no message is larger than 16777215 bytes.
+
+                    int chunkSize = msg.payload().readInt();
+                    if (chunkSize >>> 31 != 0) {
+                        throw new IllegalArgumentException("非法的 chunk size: " + chunkSize);
+                    }
+                    defaultChunkSize = chunkSize;
+                }
+
+                out.add(msg);
             }
             case BAD_MESSAGE -> {
                 // todo 非法消息处理
@@ -155,13 +176,11 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
                 chunkCache.put(csid, new ChunkMessage(fmt, csid, ts, bodySize, typeId, streamId));
             }
             case FMT_01 -> {
-                /*
-                 * Type 1 chunk headers are 7 bytes long. The message stream ID is not
-                 * included; this chunk takes the same stream ID as the preceding chunk.
-                 * Streams with variable-sized messages (for example, many video
-                 * formats) SHOULD use this format for the first chunk of each new
-                 * message after the first.
-                 */
+                // Type 1 chunk headers are 7 bytes long. The message stream ID is not
+                // included; this chunk takes the same stream ID as the preceding chunk.
+                // Streams with variable-sized messages (for example, many video
+                // formats) SHOULD use this format for the first chunk of each new
+                // message after the first.
                 if (bufLen < headLen + 7) {
                     in.resetReaderIndex();
                     return;
@@ -191,13 +210,11 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
                         .refreshBodyCapacity();
             }
             case FMT_10 -> {
-                /*
-                 * Type 2 chunk headers are 3 bytes long. Neither the stream ID nor the
-                 * message length is included; this chunk has the same stream ID and
-                 * message length as the preceding chunk. Streams with constant-sized
-                 * messages (for example, some audio and data formats) SHOULD use this
-                 * format for the first chunk of each message after the first.
-                 */
+                // Type 2 chunk headers are 3 bytes long. Neither the stream ID nor the
+                // message length is included; this chunk has the same stream ID and
+                // message length as the preceding chunk. Streams with constant-sized
+                // messages (for example, some audio and data formats) SHOULD use this
+                // format for the first chunk of each message after the first.
                 if (bufLen < headLen + 3) {
                     in.resetReaderIndex();
                     return;
@@ -219,22 +236,20 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
                 preChunk.setTsDelta(tsDelta).refreshBodyCapacity();
             }
             case FMT_11 -> {
-                /*
-                 * Type 3 chunks have no message header. The stream ID, message length
-                 *  and timestamp delta fields are not present; chunks of this type take
-                 *  values from the preceding chunk for the same Chunk Stream ID. When a
-                 *  single message is split into chunks, all chunks of a message except
-                 *  the first one SHOULD use this type. Refer to Example 2
-                 *  (Section 5.3.2.2). A stream consisting of messages of exactly the
-                 *  same size, stream ID and spacing in time SHOULD use this type for all
-                 *  chunks after a chunk of Type 2. Refer to Example 1
-                 *  (Section 5.3.2.1). If the delta between the first message and the
-                 *  second message is same as the timestamp of the first message, then a
-                 *  chunk of Type 3 could immediately follow the chunk of Type 0 as there
-                 *  is no need for a chunk of Type 2 to register the delta. If a Type 3
-                 *  chunk follows a Type 0 chunk, then the timestamp delta for this Type
-                 *  3 chunk is the same as the timestamp of the Type 0 chunk.
-                 */
+                // Type 3 chunks have no message header. The stream ID, message length
+                //  and timestamp delta fields are not present; chunks of this type take
+                //  values from the preceding chunk for the same Chunk Stream ID. When a
+                //  single message is split into chunks, all chunks of a message except
+                //  the first one SHOULD use this type. Refer to Example 2
+                //  (Section 5.3.2.2). A stream consisting of messages of exactly the
+                //  same size, stream ID and spacing in time SHOULD use this type for all
+                //  chunks after a chunk of Type 2. Refer to Example 1
+                //  (Section 5.3.2.1). If the delta between the first message and the
+                //  second message is same as the timestamp of the first message, then a
+                //  chunk of Type 3 could immediately follow the chunk of Type 0 as there
+                //  is no need for a chunk of Type 2 to register the delta. If a Type 3
+                //  chunk follows a Type 0 chunk, then the timestamp delta for this Type
+                //  3 chunk is the same as the timestamp of the Type 0 chunk.
                 preChunk.refreshBodyCapacity();
             }
         }
@@ -267,7 +282,7 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         log.error(cause.getMessage(), cause);
     }
 
