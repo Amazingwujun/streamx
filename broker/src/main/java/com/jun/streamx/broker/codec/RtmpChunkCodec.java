@@ -85,7 +85,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeMedium(0) // timestamp, 4 byte
                         .writeMedium(4) // body size, 7 byte
                         .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeInt(0) // stream id, 12 byte
+                        .writeIntLE(0) // stream id, 12 byte
                         .writeBytes(msg.payload());
             }
             case SET_PEER_BANDWIDTH -> {
@@ -94,7 +94,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeMedium(0) // timestamp, 4 byte
                         .writeMedium(5) // body size(), 7 byte
                         .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeInt(0) // stream id, 12 byte
+                        .writeIntLE(0) // stream id, 12 byte
                         .writeBytes(msg.payload());
             }
             case SET_CHUNK_SIZE -> {
@@ -105,7 +105,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeMedium(0) // timestamp, 4 byte
                         .writeMedium(4) // body size(), 7 byte
                         .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeInt(0) // stream id, 12 byte
+                        .writeIntLE(0) // stream id, 12 byte
                         .writeInt(chunkSize);
                 this.outboundChunkSize = chunkSize;
             }
@@ -113,9 +113,9 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 out
                         .writeByte(3) // fmt + csid, 1 byte
                         .writeMedium(0) // timestamp, 4 byte
-                        .writeMedium(msg.payloadLength()) // body size(), 7 byte
+                        .writeMedium(msg.payload().readableBytes()) // body size(), 7 byte
                         .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeInt(1); // stream id, 12 byte
+                        .writeIntLE(1); // stream id, 12 byte
 
                 multiplexing(msg.payload(), out);
             }
@@ -125,7 +125,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeMedium(0) // timestamp, 4 byte
                         .writeMedium(msg.payloadLength()) // body size(), 7 byte
                         .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeInt(1); // stream id, 12 byte
+                        .writeIntLE(1); // stream id, 12 byte
 
                 multiplexing(msg.payload(), out);
             }
@@ -142,12 +142,12 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 var ts = (int) msg.timestamp();
                 out.writeMedium(Math.min(ts, MAX_TIMESTAMP));
                 // body size 处理
-                out.writeMedium(msg.payloadLength());
+                out.writeMedium(msg.payload().readableBytes());
                 // type id 处理
                 out.writeByte(msg.messageType().val);
                 // stream id 处理
                 if (fmt == FmtEnum.FMT_00) {
-                    out.writeInt(msg.streamId());
+                    out.writeIntLE(msg.streamId());
                 }
                 // 拓展时间戳处理
                 if (ts > MAX_TIMESTAMP) {
