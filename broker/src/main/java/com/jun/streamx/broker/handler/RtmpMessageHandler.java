@@ -2,13 +2,18 @@ package com.jun.streamx.broker.handler;
 
 import com.jun.streamx.broker.constants.RtmpMessageType;
 import com.jun.streamx.broker.entity.RtmpMessage;
+import com.jun.streamx.broker.entity.amf0.Amf0Format;
+import com.jun.streamx.broker.entity.amf0.Amf0Number;
+import com.jun.streamx.broker.entity.amf0.Amf0Object;
+import com.jun.streamx.broker.entity.amf0.Amf0String;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.group.ChannelGroup;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -34,7 +39,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RtmpMessage msg) {
-        log.debug("收到 rtmp 报文: {}", msg);
+        log.info("收到 rtmp 报文: {}", msg);
         process(ctx, msg);
     }
 
@@ -74,9 +79,10 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
         if (list.isEmpty()) {
             log.error("非法的 AMF0_COMMAND 报文: {}", msg);
             ctx.close();
+            return;
         }
-        var tuple = list.get(0);
-        var commandName = (String) tuple.t1();
+        var amf0 = list.get(0).cast(Amf0String.class);
+        var commandName = amf0.getValue();
         switch (commandName) {
             // NetConnection commands
             case "connect" -> {
@@ -87,15 +93,11 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 }
 
                 // transaction id
-                var tid = (Double)list.get(1).t1();
+                var tid = list.get(1).cast(Amf0Number.class);
 
                 // app name fetch
-                @SuppressWarnings("unchecked")
-                var commandObject = (LinkedHashMap<String, Object>) list.get(2).t1();
-                this.app = (String) commandObject.get("app");
-
-                // transaction id
-
+                var commandObject = list.get(2).cast(Amf0Object.class);
+                this.app = commandObject.get("app").cast(Amf0String.class).getValue();
 
                 // window acknowledgement size, set peer bandwidth, set chunk size
                 var windowAcknowledgementSize = new RtmpMessage(
@@ -109,6 +111,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                         5, 0, 0,
                         Unpooled.buffer(5).writeInt(5_000_000).writeByte(2) // dynamic
                 );
+                ctx.write(setPeerBandwidth);
                 var setChunkSize = new RtmpMessage(
                         RtmpMessageType.SET_CHUNK_SIZE,
                         4, 0, 0,
@@ -117,11 +120,16 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 ctx.write(setChunkSize);
 
                 // _result, structure is command name + transaction id + properties + information
+                var buf = Unpooled.buffer();
+                var amf0FormatList = buildResult(tid);
+                amf0FormatList.forEach(t -> t.write(buf));
                 var _result = new RtmpMessage(
                         RtmpMessageType.AMF0_COMMAND,
-                        4, 0, 0,
-                        Unpooled.buffer()
+                        buf.readableBytes(), 0, 0,
+                        buf
                 );
+
+                ctx.writeAndFlush(_result);
             }
             case "call" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "close" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
@@ -140,7 +148,6 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
     }
 
 
-
     private void handleAudioData(ChannelHandlerContext ctx, RtmpMessage msg) {
         // 记录下第一个 audio data
         if (firstAudioPacket == null) {
@@ -155,5 +162,18 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
             // todo key frame 检查
         }
+    }
+
+    private List<Amf0Format> buildResult(Amf0Number tid) {
+        var commandName = new Amf0String("_result");
+        var properties = new Amf0Object();
+        properties.put("fmsVer", new Amf0String("FMS/3,0,1,123"));
+        properties.put("capabilities", new Amf0Number(31d));
+        var info = new Amf0Object();
+        info.put("level", new Amf0String("status"));
+        info.put("code", new Amf0String("NetConnection.Connect.Success"));
+        info.put("description",new Amf0String("Connection succeeded.") );
+        info.put("objectEncoding", new Amf0Number(0d));
+        return List.of(commandName, tid, properties, info);
     }
 }

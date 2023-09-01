@@ -1,8 +1,7 @@
 package com.jun.streamx.broker.entity;
 
-import com.jun.streamx.broker.constants.Amf0Marker;
 import com.jun.streamx.broker.constants.RtmpMessageType;
-import com.jun.streamx.commons.entity.Tuple2;
+import com.jun.streamx.broker.entity.amf0.Amf0Format;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.ReferenceCounted;
 
@@ -14,7 +13,7 @@ import java.util.List;
  * @author Jun
  * @since 1.0.0
  */
-public class RtmpMessage implements ReferenceCounted {
+public class RtmpMessage {
 
     //@formatter:off
 
@@ -87,38 +86,10 @@ public class RtmpMessage implements ReferenceCounted {
         return buf;
     }
 
-
-    @Override
-    public int refCnt() {
-        return this.payload.refCnt();
-    }
-
-    @Override
-    public ReferenceCounted retain() {
-        return this.payload.retain();
-    }
-
-    @Override
-    public ReferenceCounted retain(int increment) {
-        return this.payload.retain(increment);
-    }
-
-    @Override
-    public ReferenceCounted touch() {
-        return this.payload.touch();
-    }
-
-    @Override
-    public ReferenceCounted touch(Object hint) {
-        return this.payload.touch(hint);
-    }
-
-    @Override
     public boolean release() {
         return this.payload.release();
     }
 
-    @Override
     public boolean release(int decrement) {
         return this.payload.release(decrement);
     }
@@ -128,7 +99,7 @@ public class RtmpMessage implements ReferenceCounted {
      *
      * @return AMF0 格式数据
      */
-    public List<Tuple2<Amf0Marker, Object>> payloadToAmf0() {
+    public List<Amf0Format> payloadToAmf0() {
         return Amf0Format.parse(payload);
     }
 
