@@ -5,7 +5,7 @@ import com.jun.streamx.broker.entity.RtmpMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.handler.codec.ByteToMessageCodec;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
@@ -19,7 +19,7 @@ import java.util.Map;
  * @since 1.0.0
  */
 @Slf4j
-public class RtmpChunkDecoder extends ByteToMessageDecoder {
+public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
 
     private enum DecodeState {
         READ_HEADER,
@@ -60,13 +60,125 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
 
     //@formatter:off
 
-    private int defaultChunkSize = 128;
+    private static final int MAX_TIMESTAMP = 0xffffff;
+    private static final int AV_DATA_CSID = 7;
+    private int inboundChunkSize = 128;
+    /** mtu */
+    private int outboundChunkSize = 128;
     private DecodeState state = DecodeState.READ_HEADER;
     /** 当前正在处理的 csid */
     private int currentCsid;
     private final Map<Integer, ChunkMessage> chunkCache = new HashMap<>();
+    private boolean isFistAudioDataPush, isFistVideoDataPush;
 
     //@formatter:on
+
+    @Override
+    protected void encode(ChannelHandlerContext ctx, RtmpMessage msg, ByteBuf out) {
+        // rtmp message -> chunk message
+        switch (msg.messageType()) {
+            case WINDOW_ACKNOWLEDGEMENT_SIZE -> {
+                // 此消息类型长度固定
+                // base header(11) + chunk header(11) + body(4)
+                out
+                        .writeByte(2) // fmt + csid, 1 byte
+                        .writeMedium(0) // timestamp, 4 byte
+                        .writeMedium(4) // body size, 7 byte
+                        .writeByte(msg.messageType().val) // type id, 8 byte
+                        .writeInt(0) // stream id, 12 byte
+                        .writeBytes(msg.payload());
+            }
+            case SET_PEER_BANDWIDTH -> {
+                out
+                        .writeByte(2) // fmt + csid, 1 byte
+                        .writeMedium(0) // timestamp, 4 byte
+                        .writeMedium(5) // body size(), 7 byte
+                        .writeByte(msg.messageType().val) // type id, 8 byte
+                        .writeInt(0) // stream id, 12 byte
+                        .writeBytes(msg.payload());
+            }
+            case SET_CHUNK_SIZE -> {
+                // chunk size change
+                var chunkSize = msg.payload().readInt();
+                out
+                        .writeByte(2) // fmt + csid, 1 byte
+                        .writeMedium(0) // timestamp, 4 byte
+                        .writeMedium(4) // body size(), 7 byte
+                        .writeByte(msg.messageType().val) // type id, 8 byte
+                        .writeInt(0) // stream id, 12 byte
+                        .writeInt(chunkSize);
+                this.outboundChunkSize = chunkSize;
+            }
+            case AMF0_COMMAND -> {
+                out
+                        .writeByte(3) // fmt + csid, 1 byte
+                        .writeMedium(0) // timestamp, 4 byte
+                        .writeMedium(msg.payloadLength()) // body size(), 7 byte
+                        .writeByte(msg.messageType().val) // type id, 8 byte
+                        .writeInt(1); // stream id, 12 byte
+
+                multiplexing(msg.payload(), out);
+            }
+            case AMF0_DATA -> {
+                out
+                        .writeByte(4) // fmt + csid, 1 byte
+                        .writeMedium(0) // timestamp, 4 byte
+                        .writeMedium(msg.payloadLength()) // body size(), 7 byte
+                        .writeByte(msg.messageType().val) // type id, 8 byte
+                        .writeInt(1); // stream id, 12 byte
+
+                multiplexing(msg.payload(), out);
+            }
+            case VIDEO_DATA, AUDIO_DATA -> {
+                var fmt = FmtEnum.FMT_01;
+                if (isFistVideoDataPush) {
+                    // + stream id
+                    fmt = FmtEnum.FMT_00;
+                }
+
+                // fmt + csid 处理
+                out.writeByte((fmt.val << 6) + AV_DATA_CSID);
+                // 时间戳处理
+                var ts = (int) msg.timestamp();
+                out.writeMedium(Math.min(ts, MAX_TIMESTAMP));
+                // body size 处理
+                out.writeMedium(msg.payloadLength());
+                // type id 处理
+                out.writeByte(msg.messageType().val);
+                // stream id 处理
+                if (fmt == FmtEnum.FMT_00) {
+                    out.writeInt(msg.streamId());
+                }
+                // 拓展时间戳处理
+                if (ts > MAX_TIMESTAMP) {
+                    out.writeInt(ts);
+                }
+
+                multiplexing(msg.payload(), out);
+            }
+        }
+    }
+
+    private void multiplexing(ByteBuf payload, ByteBuf dst) {
+        // chunk message 处理
+        if (payload.readableBytes() < this.outboundChunkSize) {
+            // 消息不需要分块
+            dst.writeBytes(payload);
+        } else {
+            // 消息需要分块
+            // 1 先处理当前 chunk
+            dst.writeBytes(payload, this.outboundChunkSize);
+
+            // 2 剩余的报文写入(fmt 3)
+            do {
+                var latestWriteLen = Math.min(payload.readableBytes(), this.outboundChunkSize);
+                dst
+                        .writeByte((FmtEnum.FMT_11.val << 6) + AV_DATA_CSID)
+                        .writeBytes(payload, latestWriteLen);
+            }
+            while (payload.isReadable());
+        }
+    }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
@@ -94,7 +206,7 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
                     if (chunkSize >>> 31 != 0) {
                         throw new IllegalArgumentException("非法的 chunk size: " + chunkSize);
                     }
-                    defaultChunkSize = chunkSize;
+                    inboundChunkSize = chunkSize;
                 }
 
                 out.add(msg);
@@ -262,7 +374,7 @@ public class RtmpChunkDecoder extends ByteToMessageDecoder {
         // 计算出本次解码需要读取的 size
         var chunk = chunkCache.get(currentCsid);
         var writableBytes = chunk.body.writableBytes();
-        var readSize = Math.min(defaultChunkSize, writableBytes);
+        var readSize = Math.min(inboundChunkSize, writableBytes);
 
         // 数据读取
         var bufLen = in.readableBytes();
