@@ -115,7 +115,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeMedium(0) // timestamp, 4 byte
                         .writeMedium(msg.payload().readableBytes()) // body size(), 7 byte
                         .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeIntLE(1); // stream id, 12 byte
+                        .writeIntLE(msg.streamId()); // stream id, 12 byte
 
                 multiplexing(msg.payload(), out);
             }
@@ -415,7 +415,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
 
 
         public ChunkMessage(int fmt, int csid, long ts, int bodySize, int typeId, int streamId) {
-            this(fmt, csid, ts, bodySize, typeId, streamId, Unpooled.buffer(bodySize, bodySize));
+            this(fmt, csid, ts, bodySize, typeId, streamId, Unpooled.buffer(bodySize));
         }
 
 

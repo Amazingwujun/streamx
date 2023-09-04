@@ -11,6 +11,8 @@ import io.netty.buffer.ByteBuf;
  */
 public class Amf0Null extends Amf0CastFormat {
 
+    public final static Amf0Null INSTANCE = new Amf0Null();
+
     @Override
     public Amf0Marker marker() {
         return Amf0Marker.NULL;
@@ -18,6 +20,7 @@ public class Amf0Null extends Amf0CastFormat {
 
     @Override
     public void write(ByteBuf buf) {
+        buf.writeByte(Amf0Marker.NULL.val);
     }
 
     @Override

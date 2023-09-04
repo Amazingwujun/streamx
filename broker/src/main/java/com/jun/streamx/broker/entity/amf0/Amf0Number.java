@@ -19,6 +19,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Amf0Number extends Amf0CastFormat {
 
+    public static final Amf0Number ZERO = new Amf0Number(0d);
+    public static final Amf0Number ONE = new Amf0Number(1d);
+
     private Double value;
 
     @Override

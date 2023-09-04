@@ -26,6 +26,12 @@ public class RtmpMessage {
 
     //@formatter:on
 
+    public RtmpMessage(RtmpMessageType messageType,
+                       long timestamp,
+                       int streamId,
+                       ByteBuf payload) {
+        this(messageType, payload.readableBytes(), timestamp, streamId, payload);
+    }
 
     public RtmpMessage(RtmpMessageType messageType,
                        int payloadLength,

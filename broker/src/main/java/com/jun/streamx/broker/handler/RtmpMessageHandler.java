@@ -2,17 +2,14 @@ package com.jun.streamx.broker.handler;
 
 import com.jun.streamx.broker.constants.RtmpMessageType;
 import com.jun.streamx.broker.entity.RtmpMessage;
-import com.jun.streamx.broker.entity.amf0.Amf0Format;
-import com.jun.streamx.broker.entity.amf0.Amf0Number;
-import com.jun.streamx.broker.entity.amf0.Amf0Object;
-import com.jun.streamx.broker.entity.amf0.Amf0String;
+import com.jun.streamx.broker.entity.amf0.*;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.group.ChannelGroup;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,6 +63,14 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
     }
 
     private void handleAmf0Data(ChannelHandlerContext ctx, RtmpMessage msg) {
+        // 解析出 cmd
+        var list = msg.payloadToAmf0();
+        if (list.isEmpty()) {
+            log.error("非法的 AMF0_DATA 报文: {}", msg);
+            ctx.close();
+            return;
+        }
+
 
     }
 
@@ -86,6 +91,8 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
         switch (commandName) {
             // NetConnection commands
             case "connect" -> {
+                // The client sends the connect command to the server to request connection to a server application
+                // instance.
                 // command name + transaction id + command object + optional user arguments
                 if (list.size() < 3) {
                     log.error("connect command structure error: {}", list);
@@ -121,7 +128,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
                 // _result, structure is command name + transaction id + properties + information
                 var buf = Unpooled.buffer();
-                var amf0FormatList = buildResult(tid);
+                var amf0FormatList = buildConnectResult(tid);
                 amf0FormatList.forEach(t -> t.write(buf));
                 var _result = new RtmpMessage(
                         RtmpMessageType.AMF0_COMMAND,
@@ -133,17 +140,106 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
             }
             case "call" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "close" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
-            case "createStream" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
+            case "createStream" -> {
+                // The client sends this command to the server to create a logical channel for message communication
+                // The publishing of audio, video, and metadata is carried out over stream channel created using the
+                // createStream command.
+                //
+                // NetConnection is the default communication channel, which has a stream ID 0. Protocol and a few
+                // command messages, including createStream, use the default communication channel.
+
+                // transaction id
+                var tid = list.get(1).cast(Amf0Number.class);
+
+                // _result
+                var buf = Unpooled.buffer();
+                var amf0FormatList = buildCreateStreamResult(tid);
+                amf0FormatList.forEach(t -> t.write(buf));
+                var _result = new RtmpMessage(
+                        RtmpMessageType.AMF0_COMMAND,
+                        buf.readableBytes(), 0, 0,
+                        buf
+                );
+
+                ctx.writeAndFlush(_result);
+            }
             // NetStream commands
-            case "play" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
+            case "play" -> {
+                // The client sends this command to the server to play a stream. A playlist can also be created using
+                // this command multiple times.
+                //
+                // If you want to create a dynamic playlist that switches among different live or recorded streams,
+                // call play more than once and pass false for reset each time. Conversely, if you want to play the
+                // specified stream immediately, clearing any other streams that are queued for play, pass true for reset.
+
+                var info = new Amf0Object();
+                info.put("level", new Amf0String("status"));
+                info.put("code", new Amf0String("NetStream.Play.Start"));
+                info.put("description", new Amf0String("Start publishing"));
+
+                var amf0FormatList = List.of(
+                        Amf0String.ON_STATUS,
+                        new Amf0Number(0d),
+                        Amf0Null.INSTANCE,
+                        info
+                );
+
+                // onStatus
+                var buf = Unpooled.buffer();
+                amf0FormatList.forEach(t -> t.write(buf));
+                var onStatus = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
+
+                ctx.writeAndFlush(onStatus);
+            }
             case "play2" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "deleteStream" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "closeStream" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "receiveAudio" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "receiveVideo" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
-            case "publish" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
+            case "publish" -> {
+                // The client sends the publish command to publish a named stream to the server. Using this name,
+                // any client can play this stream and receive the published audio, video, and data messages.
+
+                var info = new Amf0Object();
+                info.put("level", new Amf0String("status"));
+                info.put("code", new Amf0String("NetStream.Play.Start"));
+                info.put("description", new Amf0String("Start publishing"));
+
+                var amf0FormatList = List.of(
+                        Amf0String.ON_STATUS,
+                        new Amf0Number(0d),
+                        Amf0Null.INSTANCE,
+                        info
+                );
+
+                // onStatus
+                var buf = Unpooled.buffer();
+                amf0FormatList.forEach(t -> t.write(buf));
+                var onStatus = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
+
+                ctx.writeAndFlush(onStatus);
+            }
             case "seek" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "pause" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
+            // 抓包发现的 command
+            case "FCPublish" -> {
+                var info = new Amf0Object();
+                info.put("level", new Amf0String("onFCPublish"));
+                info.put("code", new Amf0String("NetStream.Play.Start"));
+                info.put("description", new Amf0String("Start publishing"));
+                var amf0FormatList = List.of(
+                        new Amf0String("onFCPublish"),
+                        Amf0Number.ZERO,
+                        Amf0Null.INSTANCE,
+                        info
+                );
+
+                var buf = Unpooled.buffer();
+                amf0FormatList.forEach(t -> t.write(buf));
+                var rm = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
+
+                ctx.writeAndFlush(rm);
+            }
         }
     }
 
@@ -164,16 +260,19 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
         }
     }
 
-    private List<Amf0Format> buildResult(Amf0Number tid) {
-        var commandName = new Amf0String("_result");
+    private List<Amf0Format> buildConnectResult(Amf0Number tid) {
         var properties = new Amf0Object();
         properties.put("fmsVer", new Amf0String("FMS/3,0,1,123"));
         properties.put("capabilities", new Amf0Number(31d));
         var info = new Amf0Object();
         info.put("level", new Amf0String("status"));
         info.put("code", new Amf0String("NetConnection.Connect.Success"));
-        info.put("description",new Amf0String("Connection succeeded.") );
+        info.put("description", new Amf0String("Connection succeeded."));
         info.put("objectEncoding", new Amf0Number(0d));
-        return List.of(commandName, tid, properties, info);
+        return List.of(Amf0String._RESULT, tid, properties, info);
+    }
+
+    private List<Amf0Format> buildCreateStreamResult(Amf0Number tid) {
+        return List.of(Amf0String._RESULT, tid, Amf0Null.INSTANCE, new Amf0Number(1d));
     }
 }

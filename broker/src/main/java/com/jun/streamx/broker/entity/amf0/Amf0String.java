@@ -21,6 +21,10 @@ import java.nio.charset.StandardCharsets;
 @AllArgsConstructor
 public class Amf0String extends Amf0CastFormat {
 
+    public static final Amf0String _RESULT = new Amf0String("_result");
+    public static final Amf0String _ERROR = new Amf0String("_error");
+    public static final Amf0String ON_STATUS = new Amf0String("onStatus");
+
     private String value;
 
     @Override
