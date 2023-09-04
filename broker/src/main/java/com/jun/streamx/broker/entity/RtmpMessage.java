@@ -100,6 +100,15 @@ public class RtmpMessage {
         return this.payload.release(decrement);
     }
 
+    public RtmpMessage replaced() {
+        return new RtmpMessage(messageType, timestamp, streamId, payload.copy());
+    }
+
+    public RtmpMessage retain() {
+        this.payload.retain();
+        return this;
+    }
+
     /**
      * 将当前的 payload 解析为 AMF0 格式的数据
      *

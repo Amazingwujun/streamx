@@ -87,6 +87,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeByte(msg.messageType().val) // type id, 8 byte
                         .writeIntLE(0) // stream id, 12 byte
                         .writeBytes(msg.payload());
+
             }
             case SET_PEER_BANDWIDTH -> {
                 out
@@ -117,7 +118,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeByte(msg.messageType().val) // type id, 8 byte
                         .writeIntLE(msg.streamId()); // stream id, 12 byte
 
-                multiplexing(msg.payload(), out);
+                multiplexing(3, msg.payload(), out);
             }
             case AMF0_DATA -> {
                 out
@@ -127,7 +128,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                         .writeByte(msg.messageType().val) // type id, 8 byte
                         .writeIntLE(1); // stream id, 12 byte
 
-                multiplexing(msg.payload(), out);
+                multiplexing(4, msg.payload(), out);
             }
             case VIDEO_DATA, AUDIO_DATA -> {
                 var fmt = FmtEnum.FMT_01;
@@ -154,12 +155,12 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                     out.writeInt(ts);
                 }
 
-                multiplexing(msg.payload(), out);
+                multiplexing(AV_DATA_CSID, msg.payload(), out);
             }
         }
     }
 
-    private void multiplexing(ByteBuf payload, ByteBuf dst) {
+    private void multiplexing(int csid, ByteBuf payload, ByteBuf dst) {
         // chunk message 处理
         if (payload.readableBytes() < this.outboundChunkSize) {
             // 消息不需要分块
@@ -173,7 +174,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
             do {
                 var latestWriteLen = Math.min(payload.readableBytes(), this.outboundChunkSize);
                 dst
-                        .writeByte((FmtEnum.FMT_11.val << 6) + AV_DATA_CSID)
+                        .writeByte((FmtEnum.FMT_11.val << 6) + csid)
                         .writeBytes(payload, latestWriteLen);
             }
             while (payload.isReadable());
@@ -316,6 +317,10 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
 
 
                 // 变更 type 1 的数据
+                if (preChunk == null) {
+                    log.warn("fmt type 1 pre chunk is null, csid: {}", csid);
+                    return;
+                }
                 preChunk.setTsDelta(tsDelta)
                         .setBodySize(bodySize)
                         .setTypeId(typeId)
@@ -345,6 +350,10 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 }
 
                 // 直接变更 pre chunk 的 ts, exTs
+                if (preChunk == null) {
+                    log.warn("fmt type 2 pre chunk is null, csid: {}", csid);
+                    return;
+                }
                 preChunk.setTsDelta(tsDelta).refreshBodyCapacity();
             }
             case FMT_11 -> {
@@ -362,6 +371,10 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 //  is no need for a chunk of Type 2 to register the delta. If a Type 3
                 //  chunk follows a Type 0 chunk, then the timestamp delta for this Type
                 //  3 chunk is the same as the timestamp of the Type 0 chunk.
+                if (preChunk == null) {
+                    log.warn("fmt type 3 pre chunk is null, csid: {}", csid);
+                    return;
+                }
                 preChunk.refreshBodyCapacity();
             }
         }
@@ -396,6 +409,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         log.error(cause.getMessage(), cause);
+        ctx.close();
     }
 
     private static class ChunkMessage {
