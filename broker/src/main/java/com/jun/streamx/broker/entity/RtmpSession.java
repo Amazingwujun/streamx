@@ -2,7 +2,11 @@ package com.jun.streamx.broker.entity;
 
 import com.jun.streamx.broker.entity.amf0.Amf0Format;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
+import org.springframework.util.ObjectUtils;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Rtmp 会话对象
@@ -11,12 +15,18 @@ import lombok.experimental.Accessors;
  * @since 1.0.0
  */
 @Data
+@EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-public class RtmpSession {
+public class RtmpSession extends CompletableFuture<RtmpSession.State> {
 
     public enum Type {
         publisher,
         subscriber
+    }
+
+    public enum State {
+        complete,
+        inactive
     }
 
     //@formatter:off
@@ -48,5 +58,40 @@ public class RtmpSession {
 
     public void release() {
         this.keyFrame.release();
+    }
+
+    public void setKeyFrame(RtmpMessage keyFrame) {
+        this.keyFrame = keyFrame;
+        if (isArgComplete()) {
+            this.complete(State.complete);
+        }
+    }
+
+    public void setMetadata(Amf0Format metadata) {
+        this.metadata = metadata;
+        if (isArgComplete()) {
+            this.complete(State.complete);
+        }
+    }
+
+    /**
+     * 判断 publish stream 必要参数是否完整.
+     */
+    @SuppressWarnings("RedundantIfStatement")
+    private boolean isArgComplete() {
+        if (ObjectUtils.isEmpty(app)) {
+            return false;
+        }
+        if (ObjectUtils.isEmpty(streamName)) {
+            return false;
+        }
+        if (metadata == null) {
+            return false;
+        }
+        if (keyFrame == null) {
+            return false;
+        }
+
+        return true;
     }
 }

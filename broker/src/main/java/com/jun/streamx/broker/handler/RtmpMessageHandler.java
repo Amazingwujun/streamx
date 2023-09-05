@@ -65,6 +65,9 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
             if (RtmpSession.Type.publisher == session.getType()) {
                 PUBLISHERS.remove(session.streamKey());
 
+                // 变更 session 状态
+                session.complete(RtmpSession.State.inactive);
+
                 // 释放 session 里的 keyframe
                 session.release();
             }

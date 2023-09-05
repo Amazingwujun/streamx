@@ -154,10 +154,6 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
         // channel 类型置入
         subscriberSession.setType(RtmpSession.Type.subscriber);
 
-        // 找到对应的 publish 端
-        var publisherChannel = publishers.get(streamKey);
-        var publisherSession = getSession(publisherChannel);
-
         // onStatus 响应
         var info = new Amf0Object();
         info.put("level", Amf0String.STATUS);
@@ -185,39 +181,57 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
         );
         ctx.write(sampleAccess);
 
-        // meta data
-        var onMetadataBuf = Unpooled.buffer();
-        List
-                .of(Amf0String.ON_METADATA, publisherSession.getMetadata())
-                .forEach(t -> t.write(onMetadataBuf));
-        var onMetadata = new RtmpMessage(
-                RtmpMessageType.AMF0_DATA,
-                0, 0,
-                onMetadataBuf
-        );
-        ctx.write(onMetadata);
+        // 找到对应的 publisher
+        var publisherChannel = publishers.get(streamKey);
+        if (publisherChannel == null) {
+            log.warn("Stream[{}] 没有 publisher", streamKey);
+            ctx.close();
+            return;
+        }
+        final var publisherSession = getSession(publisherChannel);
+        publisherSession.thenAccept(state -> {
+            if (state != RtmpSession.State.complete) {
+                log.warn("publisher state is {}", state);
+                return;
+            }
 
-        // start stream push
-        // todo 采用 Future 优化此逻辑
-        var keyFrame = publisherSession.getKeyFrame();
-        var video = new RtmpMessage(
-                RtmpMessageType.VIDEO_DATA,
-                publisherSession.getLatestVideoTimestamp(),
-                keyFrame.streamId(),
-                keyFrame.payload().copy()
-        );
-        ctx.writeAndFlush(video).addListener(
-                future -> {
-                    if (future.isSuccess()) {
-                        // 加入拉流端
-                        subscribers.computeIfAbsent(streamKey, unused -> new DefaultChannelGroup(GlobalEventExecutor.INSTANCE))
-                                .add(ctx.channel());
-                    } else {
-                        log.error("keyframe write failed: " + future.cause().getMessage(), future.cause());
-                        ctx.close();
+            // meta data
+            // todo meta data 数据内容替换
+            var onMetadataBuf = Unpooled.buffer();
+            List
+                    .of(Amf0String.ON_METADATA, publisherSession.getMetadata())
+                    .forEach(t -> t.write(onMetadataBuf));
+            var onMetadata = new RtmpMessage(
+                    RtmpMessageType.AMF0_DATA,
+                    0, 0,
+                    onMetadataBuf
+            );
+            ctx.write(onMetadata);
+
+            // start stream push
+            var keyFrame = publisherSession.getKeyFrame();
+            var video = new RtmpMessage(
+                    RtmpMessageType.VIDEO_DATA,
+                    0,
+                    keyFrame.streamId(),
+                    keyFrame.payload().copy()
+            );
+            ctx.writeAndFlush(video).addListener(
+                    future -> {
+                        if (future.isSuccess()) {
+                            // 加入拉流端
+                            subscribers.computeIfAbsent(streamKey, k -> new DefaultChannelGroup(GlobalEventExecutor.INSTANCE))
+                                    .add(ctx.channel());
+                        } else {
+                            log.error("keyframe write failed: " + future.cause().getMessage(), future.cause());
+                            ctx.close();
+                        }
                     }
-                }
-        );
+            );
+        }).exceptionally(throwable -> {
+            log.error("publisher session completeFailed: " + throwable.getMessage(), throwable);
+            return null;
+        });
     }
 
     private void onPublish(ChannelHandlerContext ctx, List<Amf0Format> list) {
