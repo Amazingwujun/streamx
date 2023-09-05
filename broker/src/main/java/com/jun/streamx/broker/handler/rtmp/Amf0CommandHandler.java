@@ -199,7 +199,7 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
             // todo meta data 数据内容替换
             var onMetadataBuf = Unpooled.buffer();
             List
-                    .of(Amf0String.ON_METADATA, publisherSession.getMetadata())
+                    .of(Amf0String.ON_META_DATA, publisherSession.getMetadata())
                     .forEach(t -> t.write(onMetadataBuf));
             var onMetadata = new RtmpMessage(
                     RtmpMessageType.AMF0_DATA,

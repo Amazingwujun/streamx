@@ -24,7 +24,7 @@ public class Amf0String extends Amf0CastFormat {
     public static final Amf0String _RESULT = new Amf0String("_result");
     public static final Amf0String _ERROR = new Amf0String("_error");
     public static final Amf0String ON_STATUS = new Amf0String("onStatus");
-    public static final Amf0String ON_METADATA = new Amf0String("onMetadata");
+    public static final Amf0String ON_META_DATA = new Amf0String("onMetaData");
     public static final Amf0String ON_FC_PUBLISH = new Amf0String("onFCPublish");
     public static final Amf0String STATUS = new Amf0String("status");
     public static final Amf0String RTMP_SAMPLE_ACCESS = new Amf0String("|RtmpSampleAccess");

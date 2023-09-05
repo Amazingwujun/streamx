@@ -32,7 +32,7 @@ public class Amf0DataHandler extends AbstractMessageHandler {
         for (int i = 0; i < list.size(); i++) {
             var amf0Format = list.get(i);
             if (amf0Format instanceof Amf0String s) {
-                if (Amf0String.ON_METADATA.getValue().equals(s.getValue())) {
+                if (Amf0String.ON_META_DATA.getValue().equals(s.getValue())) {
                     // 表明下一个 Amf0Object(nginx-rtmp-module) 或 Amf0EcmaArray(obs)
                     var metadata = list.get(i + 1);
                     session.setMetadata(metadata);
