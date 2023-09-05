@@ -24,8 +24,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
 
     private enum DecodeState {
         READ_HEADER,
-        READ_BODY,
-        BAD_MESSAGE
+        READ_BODY
     }
 
     private enum FmtEnum {
@@ -210,9 +209,6 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 }
 
                 out.add(msg);
-            }
-            case BAD_MESSAGE -> {
-                // todo 非法消息处理
             }
         }
     }
