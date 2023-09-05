@@ -311,8 +311,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 }
 
                 // 变更 type 1 的数据
-                preChunk.setTsDelta(tsDelta)
-                        .setBodySize(bodySize)
+                preChunk.setFmt(fmt).setTsDelta(tsDelta).setBodySize(bodySize)
                         .setTypeId(typeId)
                         .refreshBodyCapacity();
             }
@@ -340,7 +339,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 }
 
                 // 直接变更 pre chunk 的 ts, exTs
-                preChunk.setTsDelta(tsDelta).refreshBodyCapacity();
+                preChunk.setFmt(fmt).setTsDelta(tsDelta).refreshBodyCapacity();
             }
             case FMT_11 -> {
                 // Type 3 chunks have no message header. The stream ID, message length
@@ -358,11 +357,33 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 // chunk follows a Type 0 chunk, then the timestamp delta for this Type
                 // 3 chunk is the same as the timestamp of the Type 0 chunk.
 
-                // 拓展时间戳处理
-                // 问题: 当 timestamp > MAX_TIMESTAMP 后， 有的 camera 推送的 chunk type 3 的 base header 后面居然会携带时间戳？
-                // 目前发现的品牌是 "中维世纪"
-                if (preChunk.ts > MAX_TIMESTAMP) {
-                    in.skipBytes(4);
+                // 时间戳兼容处理
+                // 实现存在异议，引用 nginx-rtmp 的说法:
+                // Messages with type=3 should
+                // never have ext timestamp field
+                // according to standard.
+                // However that's not always the case
+                // in real life
+                if (bufLen < headLen + 4) {
+                    in.resetReaderIndex();
+                    return;
+                }
+                in.markReaderIndex();
+                switch (preChunk.fmt) {
+                    case 0 -> {
+                        var currentTs = in.readUnsignedInt();
+                        // 判断 fmt 3 base header 后面是否是拓展时间戳
+                        if (!(preChunk.ts > MAX_TIMESTAMP && currentTs == preChunk.ts)) {
+                            in.resetReaderIndex();
+                        }
+                    }
+                    case 1, 2 -> {
+                        var currentTs = in.readUnsignedInt();
+                        // 判断 fmt 3 base header 后面是否是拓展时间增量
+                        if (!(preChunk.tsDelta > MAX_TIMESTAMP && currentTs == preChunk.tsDelta)) {
+                            in.resetReaderIndex();
+                        }
+                    }
                 }
             }
         }
@@ -406,10 +427,12 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
         public int fmt;
         /** chunk stream id */
         public int csid;
+        /** 这里的 ts 应该是 calculation timestamp */
         public long ts;
         public int bodySize;
         public int typeId;
         public int streamId;
+        public long tsDelta;
 
         public ByteBuf body;
 
@@ -447,7 +470,13 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
             this.body.release();
         }
 
+        public ChunkMessage setFmt(int fmt) {
+            this.fmt = fmt;
+            return this;
+        }
+
         public ChunkMessage setTsDelta(long tsDelta) {
+            this.tsDelta = tsDelta;
             this.ts += tsDelta;
             return this;
         }
