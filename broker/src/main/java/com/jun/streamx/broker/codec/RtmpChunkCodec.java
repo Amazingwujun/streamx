@@ -79,29 +79,23 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
     protected void encode(ChannelHandlerContext ctx, RtmpMessage msg, ByteBuf out) {
         final var payload = msg.payload();
         final var messageType = msg.messageType();
+        final var streamId = msg.streamId();
 
         // rtmp message -> chunk message
         var fmt = FmtEnum.FMT_00;
-        int csid, streamId;
+        int csid;
         int ts = (int) msg.timestamp();
         switch (messageType) {
-            case WINDOW_ACKNOWLEDGEMENT_SIZE, SET_PEER_BANDWIDTH, AMF0_COMMAND -> {
-                csid = 2;
-                streamId = 0;
-            }
+            case WINDOW_ACKNOWLEDGEMENT_SIZE, SET_PEER_BANDWIDTH, AMF0_COMMAND -> csid = 2;
             case SET_CHUNK_SIZE -> {
                 csid = 2;
-                streamId = 0;
                 // chunk size change
                 payload.markReaderIndex();
                 var chunkSize = payload.readInt();
                 payload.resetReaderIndex();
                 this.outboundChunkSize = chunkSize;
             }
-            case AMF0_DATA -> {
-                csid = 5;
-                streamId = 1;
-            }
+            case AMF0_DATA -> csid = 5;
             case AUDIO_DATA -> {
                 csid = AV_DATA_CSID;
                 fmt = FmtEnum.FMT_01;
@@ -155,7 +149,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
         out.writeByte(messageType.val);
         // stream id 处理
         if (fmt == FmtEnum.FMT_00) {
-            out.writeIntLE(msg.streamId());
+            out.writeIntLE(streamId);
         }
         // 拓展时间戳处理
         if (ts > MAX_TIMESTAMP) {

@@ -2,7 +2,8 @@ package com.jun.streamx.broker;
 
 import com.jun.streamx.broker.codec.RtmpChunkCodec;
 import com.jun.streamx.broker.codec.RtmpSimpleHandshakeHandler;
-import com.jun.streamx.broker.handler.RtmpMessageHandler;
+import com.jun.streamx.broker.handler.rtmp.MessageDispatchHandler;
+import com.jun.streamx.broker.handler.rtmp.RtmpMessageHandler;
 import com.jun.streamx.broker.net.ServerProperties;
 import com.jun.streamx.broker.net.TcpServer;
 import com.jun.streamx.commons.utils.ByteUtils;
@@ -11,6 +12,8 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.socket.SocketChannel;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,8 +22,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
-//@SpringBootTest
+@SpringBootTest
 class BrokerApplicationTests {
+
+    @Autowired
+    private RtmpMessageHandler rtmpMessageHandler;
 
     @Test
     void rtmp() throws InterruptedException {
@@ -33,7 +39,7 @@ class BrokerApplicationTests {
                 ch.pipeline()
                         .addLast(new RtmpSimpleHandshakeHandler())
                         .addLast(new RtmpChunkCodec())
-                        .addLast(new RtmpMessageHandler());
+                        .addLast(rtmpMessageHandler);
             }
         }, sp).start();
 
@@ -54,24 +60,5 @@ class BrokerApplicationTests {
         }, sp).start();
 
         TimeUnit.HOURS.sleep(1);
-    }
-
-    @Test
-    void test1() throws IOException {
-        byte[] bytes = Files.readAllBytes(new File("E:\\Project\\streamx\\test.bin").toPath());
-
-        EmbeddedChannel channel = new EmbeddedChannel();
-        channel.pipeline().addLast(new RtmpSimpleHandshakeHandler())
-                .addLast(new RtmpChunkCodec())
-                .addLast(new RtmpMessageHandler());
-
-        channel.writeInbound(Unpooled.wrappedBuffer(bytes));
-    }
-
-    @Test
-    void test2() throws IOException {
-        byte[] bytes = Files.readAllBytes(new File("E:\\Project\\streamx\\test.bin").toPath());
-
-        Path write = Files.write(new File("d://ss.txt").toPath(), ByteUtils.toHexString(" ", bytes).getBytes(StandardCharsets.UTF_8));
     }
 }
