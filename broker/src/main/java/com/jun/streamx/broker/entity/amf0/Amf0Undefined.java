@@ -18,6 +18,7 @@ public class Amf0Undefined extends Amf0CastFormat {
 
     @Override
     public void write(ByteBuf buf) {
+        buf.writeByte(marker().val);
     }
 
     @Override

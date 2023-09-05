@@ -2,6 +2,7 @@ package com.jun.streamx.broker.codec;
 
 import com.jun.streamx.broker.constants.RtmpMessageType;
 import com.jun.streamx.broker.entity.RtmpMessage;
+import com.jun.streamx.commons.exception.StreamxException;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -69,95 +70,99 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
     /** 当前正在处理的 csid */
     private int currentCsid;
     private final Map<Integer, ChunkMessage> chunkCache = new HashMap<>();
-    private boolean isFistAudioDataPush, isFistVideoDataPush;
+    private boolean isFistAudioDataPush = true, isFistVideoDataPush = true, isFirstAVDataPush = true;
+    private int preAVTimestamp;
 
     //@formatter:on
 
     @Override
     protected void encode(ChannelHandlerContext ctx, RtmpMessage msg, ByteBuf out) {
-        // rtmp message -> chunk message
-        switch (msg.messageType()) {
-            case WINDOW_ACKNOWLEDGEMENT_SIZE -> {
-                // 此消息类型长度固定
-                // base header(11) + chunk header(11) + body(4)
-                out
-                        .writeByte(2) // fmt + csid, 1 byte
-                        .writeMedium(0) // timestamp, 4 byte
-                        .writeMedium(4) // body size, 7 byte
-                        .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeIntLE(0) // stream id, 12 byte
-                        .writeBytes(msg.payload());
+        final var payload = msg.payload();
+        final var messageType = msg.messageType();
 
-            }
-            case SET_PEER_BANDWIDTH -> {
-                out
-                        .writeByte(2) // fmt + csid, 1 byte
-                        .writeMedium(0) // timestamp, 4 byte
-                        .writeMedium(5) // body size(), 7 byte
-                        .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeIntLE(0) // stream id, 12 byte
-                        .writeBytes(msg.payload());
+        // rtmp message -> chunk message
+        var fmt = FmtEnum.FMT_00;
+        int csid, streamId;
+        int ts = (int) msg.timestamp();
+        switch (messageType) {
+            case WINDOW_ACKNOWLEDGEMENT_SIZE, SET_PEER_BANDWIDTH, AMF0_COMMAND -> {
+                csid = 2;
+                streamId = 0;
             }
             case SET_CHUNK_SIZE -> {
+                csid = 2;
+                streamId = 0;
                 // chunk size change
-                var chunkSize = msg.payload().readInt();
-                out
-                        .writeByte(2) // fmt + csid, 1 byte
-                        .writeMedium(0) // timestamp, 4 byte
-                        .writeMedium(4) // body size(), 7 byte
-                        .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeIntLE(0) // stream id, 12 byte
-                        .writeInt(chunkSize);
+                payload.markReaderIndex();
+                var chunkSize = payload.readInt();
+                payload.resetReaderIndex();
                 this.outboundChunkSize = chunkSize;
             }
-            case AMF0_COMMAND -> {
-                out
-                        .writeByte(3) // fmt + csid, 1 byte
-                        .writeMedium(0) // timestamp, 4 byte
-                        .writeMedium(msg.payload().readableBytes()) // body size(), 7 byte
-                        .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeIntLE(msg.streamId()); // stream id, 12 byte
-
-                multiplexing(3, msg.payload(), out);
-            }
             case AMF0_DATA -> {
-                out
-                        .writeByte(4) // fmt + csid, 1 byte
-                        .writeMedium(0) // timestamp, 4 byte
-                        .writeMedium(msg.payloadLength()) // body size(), 7 byte
-                        .writeByte(msg.messageType().val) // type id, 8 byte
-                        .writeIntLE(1); // stream id, 12 byte
-
-                multiplexing(4, msg.payload(), out);
+                csid = 5;
+                streamId = 1;
             }
-            case VIDEO_DATA, AUDIO_DATA -> {
-                var fmt = FmtEnum.FMT_01;
+            case AUDIO_DATA -> {
+                csid = AV_DATA_CSID;
+                fmt = FmtEnum.FMT_01;
+                if (isFistAudioDataPush) {
+                    // + stream id
+                    fmt = FmtEnum.FMT_00;
+                    isFistAudioDataPush = false;
+
+                    // 时间戳记录
+                    if (isFirstAVDataPush) {
+                        isFirstAVDataPush = false;
+                        this.preAVTimestamp = ts;
+                    }
+                } else {
+                    // timestamp delta
+                    var delta = ts - preAVTimestamp;
+                    preAVTimestamp = ts;
+                    ts = delta;
+                }
+            }
+            case VIDEO_DATA -> {
+                csid = AV_DATA_CSID;
+                fmt = FmtEnum.FMT_01;
                 if (isFistVideoDataPush) {
                     // + stream id
                     fmt = FmtEnum.FMT_00;
-                }
+                    isFistVideoDataPush = false;
 
-                // fmt + csid 处理
-                out.writeByte((fmt.val << 6) + AV_DATA_CSID);
-                // 时间戳处理
-                var ts = (int) msg.timestamp();
-                out.writeMedium(Math.min(ts, MAX_TIMESTAMP));
-                // body size 处理
-                out.writeMedium(msg.payload().readableBytes());
-                // type id 处理
-                out.writeByte(msg.messageType().val);
-                // stream id 处理
-                if (fmt == FmtEnum.FMT_00) {
-                    out.writeIntLE(msg.streamId());
+                    // 时间戳记录
+                    if (isFirstAVDataPush) {
+                        isFirstAVDataPush = false;
+                        this.preAVTimestamp = ts;
+                    }
+                } else {
+                    // timestamp delta
+                    var delta = ts - preAVTimestamp;
+                    preAVTimestamp = ts;
+                    ts = delta;
                 }
-                // 拓展时间戳处理
-                if (ts > MAX_TIMESTAMP) {
-                    out.writeInt(ts);
-                }
-
-                multiplexing(AV_DATA_CSID, msg.payload(), out);
             }
+            default -> throw new StreamxException("不支持的消息类型: " + messageType);
         }
+
+        // fmt + csid 处理
+        out.writeByte((fmt.val << 6) + csid);
+        // 时间戳处理
+        out.writeMedium(Math.min(ts, MAX_TIMESTAMP));
+        // body size 处理
+        out.writeMedium(payload.readableBytes());
+        // type id 处理
+        out.writeByte(messageType.val);
+        // stream id 处理
+        if (fmt == FmtEnum.FMT_00) {
+            out.writeIntLE(msg.streamId());
+        }
+        // 拓展时间戳处理
+        if (ts > MAX_TIMESTAMP) {
+            out.writeInt(ts);
+        }
+
+        multiplexing(csid, payload, out);
     }
 
     private void multiplexing(int csid, ByteBuf payload, ByteBuf dst) {
@@ -446,7 +451,6 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
         public RtmpMessage toRtmpMessage() {
             var msg = new RtmpMessage(
                     RtmpMessageType.valueOf(this.typeId),
-                    bodySize,
                     ts,
                     this.streamId,
                     body.copy()

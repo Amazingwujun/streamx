@@ -10,10 +10,16 @@ import lombok.Data;
  * @author Jun
  * @since 1.0.0
  */
-@Data
 public class Amf0Reference extends Amf0CastFormat {
 
     private int value;
+
+    public Amf0Reference() {
+    }
+
+    public Amf0Reference(int value) {
+        this.value = value;
+    }
 
     @Override
     public Amf0Marker marker() {
@@ -31,10 +37,5 @@ public class Amf0Reference extends Amf0CastFormat {
     public Amf0Format read(ByteBuf src) {
         this.value = src.readUnsignedShort();
         return this;
-    }
-
-    public static void main(String[] args) {
-        Amf0Reference amf0Reference = new Amf0Reference();
-        System.out.println(amf0Reference);
     }
 }

@@ -3,14 +3,13 @@ package com.jun.streamx.broker.handler;
 import com.jun.streamx.broker.constants.RtmpMessageType;
 import com.jun.streamx.broker.entity.RtmpMessage;
 import com.jun.streamx.broker.entity.amf0.*;
+import com.jun.streamx.broker.exception.UnsupportedParamsException;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,13 +30,13 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
     //@formatter:off
 
     enum ClientType {
-        publish,
-        subscribe
+        publisher,
+        subscriber
     }
-
 
     private static final String CLIENT_TYPE = "client-type";
     private static final String STREAM_KEY = "stream-key";
+    private static final String FIRST_VIDEO_PACKET_KEY = "firstVideoPacketKey";
     /** k: app + stream name, v: 订阅客户端列表 */
     public static final Map<String, ChannelGroup> SUBSCRIBE = new ConcurrentHashMap<>();
     /** 推流 channel */
@@ -49,6 +48,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
     private RtmpMessage firstAudioPacket;
     private RtmpMessage firstVideoPacket;
     private Amf0Format metadata;
+    private long latestVideoTimestamp;
 
     //@formatter:on
 
@@ -59,7 +59,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RtmpMessage msg) {
-        log.debug("收到 rtmp 报文: {}", msg);
+//        log.debug("收到 rtmp 报文: {}", msg);
         process(ctx, msg);
     }
 
@@ -68,7 +68,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
         log.info("channel[{}] inactive", ctx.channel().id());
 
         // 移除 channel
-        if (isPublish(ctx)) {
+        if (isPublisher(ctx)) {
             PUBLISH.remove(streamKey());
         }
     }
@@ -87,6 +87,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
             case AMF0_COMMAND -> handleAmf0Command(ctx, msg);
             case AUDIO_DATA -> handleAudioData(ctx, msg);
             case VIDEO_DATA -> handleVideoData(ctx, msg);
+            default -> log.warn("un process msg type: {}", msg.messageType());
         }
     }
 
@@ -101,7 +102,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
         // 我们需要 metadata
         for (int i = 0; i < list.size(); i++) {
-            Amf0Format amf0Format = list.get(i);
+            var amf0Format = list.get(i);
             if (amf0Format instanceof Amf0String s) {
                 if ("onMetaData".equals(s.getValue())) {
                     // 表明下一个 Amf0Object(nginx-rtmp-module) 或 Amf0EcmaArray(obs)
@@ -147,13 +148,13 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 // window acknowledgement size, set peer bandwidth, set chunk size
                 var windowAcknowledgementSize = new RtmpMessage(
                         RtmpMessageType.WINDOW_ACKNOWLEDGEMENT_SIZE,
-                        4, 0, 0,
+                        0, 0,
                         Unpooled.buffer(4).writeInt(5_000_000)
                 );
                 ctx.write(windowAcknowledgementSize);
                 var setPeerBandwidth = new RtmpMessage(
                         RtmpMessageType.SET_PEER_BANDWIDTH,
-                        5, 0, 0,
+                        0, 0,
                         Unpooled.buffer(5).writeInt(5_000_000).writeByte(2) // dynamic
                 );
                 ctx.write(setPeerBandwidth);
@@ -170,7 +171,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 amf0FormatList.forEach(t -> t.write(buf));
                 var _result = new RtmpMessage(
                         RtmpMessageType.AMF0_COMMAND,
-                        buf.readableBytes(), 0, 0,
+                        0, 0,
                         buf
                 );
 
@@ -195,7 +196,7 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 amf0FormatList.forEach(t -> t.write(buf));
                 var _result = new RtmpMessage(
                         RtmpMessageType.AMF0_COMMAND,
-                        buf.readableBytes(), 0, 0,
+                        0, 0,
                         buf
                 );
 
@@ -209,6 +210,9 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 // If you want to create a dynamic playlist that switches among different live or recorded streams,
                 // call play more than once and pass false for reset each time. Conversely, if you want to play the
                 // specified stream immediately, clearing any other streams that are queued for play, pass true for reset.
+                // channel 类型置入
+                channelTypeAppend(ClientType.subscriber, ctx);
+
                 // stream name 处理
                 this.streamName = list.get(3).cast(Amf0String.class).getValue();
 
@@ -218,11 +222,11 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
                 // onStatus 响应
                 var info = new Amf0Object();
-                info.put("level", Amf0String.ON_STATUS);
+                info.put("level", Amf0String.STATUS);
                 info.put("code", new Amf0String("NetStream.Play.Start"));
                 info.put("description", new Amf0String("Start publishing"));
                 var amf0FormatList = List.of(
-                        Amf0String.ON_METADATA,
+                        Amf0String.ON_STATUS,
                         new Amf0Number(0d),
                         Amf0Null.INSTANCE,
                         info
@@ -232,10 +236,22 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 var onStatus = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
                 ctx.write(onStatus);
 
+                // |RtmpSampleAccess
+                var sampleAccessBuf = Unpooled.buffer();
+                List.of(
+                        new Amf0String("|RtmpSampleAccess"),
+                        Amf0Boolean.TRUE,
+                        Amf0Boolean.TRUE
+                ).forEach(t -> t.write(sampleAccessBuf));
+                var sampleAccess = new RtmpMessage(
+                        RtmpMessageType.AMF0_DATA,
+                        0, 1, sampleAccessBuf
+                );
+                ctx.write(sampleAccess);
+
                 // meta data 推送
-                List<Amf0Format> amf0Formats = List.of(Amf0String.ON_METADATA, o.metadata);
                 var onMetadataBuf = Unpooled.buffer();
-                amf0Formats.forEach(t -> t.write(onMetadataBuf));
+                List.of(Amf0String.ON_METADATA, o.metadata).forEach(t -> t.write(onMetadataBuf));
                 var onMetadata = new RtmpMessage(
                         RtmpMessageType.AMF0_DATA,
                         0, 0,
@@ -244,8 +260,14 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
                 ctx.write(onMetadata);
 
                 // fist audio and video
-                Optional.ofNullable(o.firstAudio).ifPresent(ctx::write);
-                ctx.writeAndFlush(o.firstVideo.replaced()).addListener(
+                var video = new RtmpMessage(
+                        o.firstVideo.messageType(),
+                        latestVideoTimestamp,
+                        o.firstVideo.streamId(),
+                        o.firstVideo.payload().copy()
+                );
+                Optional.ofNullable(o.firstAudio.copy()).ifPresent(ctx::write);
+                ctx.writeAndFlush(video).addListener(
                         future -> {
                             if (future.isSuccess()) {
                                 // 加入拉流端
@@ -266,6 +288,8 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
             case "publish" -> {
                 // The client sends the publish command to publish a named stream to the server. Using this name,
                 // any client can play this stream and receive the published audio, video, and data messages.
+                // channel 类型置入
+                channelTypeAppend(ClientType.publisher, ctx);
 
                 // stream name fetch
                 this.streamName = list.get(3).cast(Amf0String.class).getValue();
@@ -325,24 +349,19 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
     }
 
     private void handleVideoData(ChannelHandlerContext ctx, RtmpMessage msg) {
-        // 记录下第一个 video data
-        if (firstVideoPacket == null) {
+        // 记录下第一个 key video data
+        if (firstVideoPacket == null && msg.isKeyFrame()) {
             this.firstVideoPacket = msg.replaced();
-
-            // todo key frame 检查
-
 
             // 加入推流端
             var channel = ctx.channel();
-            channel.attr(AttributeKey.valueOf(CLIENT_TYPE)).set(ClientType.publish);
+            channel.attr(AttributeKey.valueOf(CLIENT_TYPE)).set(ClientType.publisher);
             PUBLISH.put(streamKey(), channel);
             ctx.channel().attr(AttributeKey.valueOf(STREAM_KEY))
                     .set(new HeadWrapper(metadata, firstAudioPacket, firstVideoPacket));
         } else {
             Optional.ofNullable(SUBSCRIBE.get(streamKey()))
-                            .ifPresent(channels -> {
-                                channels.forEach(channel -> channel.writeAndFlush(msg.retain()));
-                            });
+                    .ifPresent(channels -> channels.forEach(channel -> channel.writeAndFlush(msg.retain())));
         }
     }
 
@@ -366,11 +385,17 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
         return String.format("%s/%s", app, streamName);
     }
 
-    private boolean isPublish(ChannelHandlerContext ctx) {
-        Object type = ctx.channel().attr(AttributeKey.valueOf(CLIENT_TYPE)).get();
-        return type == ClientType.publish;
+    private boolean isPublisher(ChannelHandlerContext ctx) {
+        return channelType(ctx) == ClientType.publisher;
     }
 
+    private void channelTypeAppend(ClientType type, ChannelHandlerContext ctx) {
+        ctx.channel().attr(AttributeKey.valueOf(CLIENT_TYPE)).set(type);
+    }
+
+    private ClientType channelType(ChannelHandlerContext ctx) {
+        return (ClientType) ctx.channel().attr(AttributeKey.valueOf(CLIENT_TYPE)).get();
+    }
 
     private record HeadWrapper(Amf0Format metadata, RtmpMessage firstAudio, RtmpMessage firstVideo) {
     }

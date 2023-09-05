@@ -177,8 +177,10 @@ public class RtmpMessage implements ByteBufHolder {
         }
 
         content().markReaderIndex();
-        byte b = content().readByte();
-        return b == 0x17;
+        byte b1 = content().readByte();
+        byte b2 = content().readByte();
+        content().resetReaderIndex();
+        return b1 == 0x17 && b2 == 1;
     }
 
     /**
@@ -194,6 +196,22 @@ public class RtmpMessage implements ByteBufHolder {
         byte b2 = content().readByte();
         content().resetReaderIndex();
         return b1 == 0x17 && b2 == 0;
+    }
+
+    /**
+     * key frame 检查
+     *
+     * @return true if video frame is key frame
+     */
+    public boolean isKeyFrame() {
+        if (RtmpMessageType.VIDEO_DATA != messageType) {
+            throw new UnsupportedOperationException("不支持 " + messageType + " 类型进行 key frame 判断");
+        }
+
+        content().markReaderIndex();
+        byte b1 = content().readByte();
+        content().resetReaderIndex();
+        return b1 == 0x17;
     }
 
 
