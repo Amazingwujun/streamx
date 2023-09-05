@@ -77,7 +77,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
 
     @Override
     protected void encode(ChannelHandlerContext ctx, RtmpMessage msg, ByteBuf out) {
-        final var payload = msg.payload();
+        final var payload = msg.payload().duplicate();
         final var messageType = msg.messageType();
         final var streamId = msg.streamId();
 
