@@ -3,7 +3,8 @@ package com.jun.streamx.broker.entity;
 import com.jun.streamx.broker.constants.RtmpMessageType;
 import com.jun.streamx.broker.entity.amf0.Amf0Format;
 import io.netty.buffer.ByteBuf;
-import io.netty.util.ReferenceCounted;
+import io.netty.buffer.ByteBufHolder;
+import io.netty.buffer.ByteBufUtil;
 
 import java.util.List;
 
@@ -13,8 +14,7 @@ import java.util.List;
  * @author Jun
  * @since 1.0.0
  */
-public class RtmpMessage {
-
+public class RtmpMessage implements ByteBufHolder {
     //@formatter:off
 
     private final RtmpMessageType messageType;
@@ -93,19 +93,67 @@ public class RtmpMessage {
     }
 
     public boolean release() {
-        return this.payload.release();
+        return content().release();
     }
 
     public boolean release(int decrement) {
-        return this.payload.release(decrement);
+        return content().release(decrement);
     }
 
     public RtmpMessage replaced() {
         return new RtmpMessage(messageType, timestamp, streamId, payload.copy());
     }
 
+    @Override
+    public ByteBuf content() {
+        return ByteBufUtil.ensureAccessible(payload);
+    }
+
+    @Override
+    public RtmpMessage copy() {
+        return replace(content().copy());
+    }
+
+    @Override
+    public RtmpMessage duplicate() {
+        return replace(content().duplicate());
+    }
+
+    @Override
+    public RtmpMessage retainedDuplicate() {
+        return replace(content().retainedDuplicate());
+    }
+
+    @Override
+    public RtmpMessage replace(ByteBuf content) {
+        return new RtmpMessage(messageType, timestamp, streamId, content);
+    }
+
+    @Override
+    public int refCnt() {
+        return content().refCnt();
+    }
+
     public RtmpMessage retain() {
-        this.payload.retain();
+        content().retain();
+        return this;
+    }
+
+    @Override
+    public RtmpMessage retain(int increment) {
+        content().retain(increment);
+        return null;
+    }
+
+    @Override
+    public RtmpMessage touch() {
+        content().touch();
+        return this;
+    }
+
+    @Override
+    public RtmpMessage touch(Object hint) {
+        content().touch(hint);
         return this;
     }
 
@@ -117,6 +165,37 @@ public class RtmpMessage {
     public List<Amf0Format> payloadToAmf0() {
         return Amf0Format.parse(payload);
     }
+
+    /**
+     * 检查数据包是AVC sequence header，即AVC格式的视频序列头信息。
+     *
+     * @return true if video data is key frame
+     */
+    public boolean isAVCNALU() {
+        if (RtmpMessageType.VIDEO_DATA != messageType) {
+            throw new UnsupportedOperationException("不支持 " + messageType + " 类型进行 key frame 判断");
+        }
+
+        content().markReaderIndex();
+        byte b = content().readByte();
+        return b == 0x17;
+    }
+
+    /**
+     * 检查数据包是AVC NALU（Network Abstraction Layer Unit），即包含视频帧数据的NALU单元。
+     */
+    public boolean isAVCSequenceHeader() {
+        if (RtmpMessageType.VIDEO_DATA != messageType) {
+            throw new UnsupportedOperationException("不支持 " + messageType + " 类型进行 key frame 判断");
+        }
+
+        content().markReaderIndex();
+        byte b1 = content().readByte();
+        byte b2 = content().readByte();
+        content().resetReaderIndex();
+        return b1 == 0x17 && b2 == 0;
+    }
+
 
     @Override
     public String toString() {
