@@ -310,12 +310,7 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                     tsDelta = in.readUnsignedInt();
                 }
 
-
                 // 变更 type 1 的数据
-                if (preChunk == null) {
-                    log.warn("fmt type 1 pre chunk is null, csid: {}", csid);
-                    return;
-                }
                 preChunk.setTsDelta(tsDelta)
                         .setBodySize(bodySize)
                         .setTypeId(typeId)
@@ -345,32 +340,30 @@ public class RtmpChunkCodec extends ByteToMessageCodec<RtmpMessage> {
                 }
 
                 // 直接变更 pre chunk 的 ts, exTs
-                if (preChunk == null) {
-                    log.warn("fmt type 2 pre chunk is null, csid: {}", csid);
-                    return;
-                }
                 preChunk.setTsDelta(tsDelta).refreshBodyCapacity();
             }
             case FMT_11 -> {
                 // Type 3 chunks have no message header. The stream ID, message length
-                //  and timestamp delta fields are not present; chunks of this type take
-                //  values from the preceding chunk for the same Chunk Stream ID. When a
-                //  single message is split into chunks, all chunks of a message except
-                //  the first one SHOULD use this type. Refer to Example 2
-                //  (Section 5.3.2.2). A stream consisting of messages of exactly the
-                //  same size, stream ID and spacing in time SHOULD use this type for all
-                //  chunks after a chunk of Type 2. Refer to Example 1
-                //  (Section 5.3.2.1). If the delta between the first message and the
-                //  second message is same as the timestamp of the first message, then a
-                //  chunk of Type 3 could immediately follow the chunk of Type 0 as there
-                //  is no need for a chunk of Type 2 to register the delta. If a Type 3
-                //  chunk follows a Type 0 chunk, then the timestamp delta for this Type
-                //  3 chunk is the same as the timestamp of the Type 0 chunk.
-                if (preChunk == null) {
-                    log.warn("fmt type 3 pre chunk is null, csid: {}", csid);
-                    return;
+                // and timestamp delta fields are not present; chunks of this type take
+                // values from the preceding chunk for the same Chunk Stream ID. When a
+                // single message is split into chunks, all chunks of a message except
+                // the first one SHOULD use this type. Refer to Example 2
+                // (Section 5.3.2.2). A stream consisting of messages of exactly the
+                // same size, stream ID and spacing in time SHOULD use this type for all
+                // chunks after a chunk of Type 2. Refer to Example 1
+                // (Section 5.3.2.1). If the delta between the first message and the
+                // second message is same as the timestamp of the first message, then a
+                // chunk of Type 3 could immediately follow the chunk of Type 0 as there
+                // is no need for a chunk of Type 2 to register the delta. If a Type 3
+                // chunk follows a Type 0 chunk, then the timestamp delta for this Type
+                // 3 chunk is the same as the timestamp of the Type 0 chunk.
+
+                // 拓展时间戳处理
+                // 问题: 当 timestamp > MAX_TIMESTAMP 后， 有的 camera 推送的 chunk type 3 的 base header 后面居然会携带时间戳？
+                // 目前发现的品牌是 "中维世纪"
+                if (preChunk.ts > MAX_TIMESTAMP) {
+                    in.skipBytes(4);
                 }
-                preChunk.refreshBodyCapacity();
             }
         }
 
