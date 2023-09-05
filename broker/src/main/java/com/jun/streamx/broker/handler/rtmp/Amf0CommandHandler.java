@@ -155,7 +155,7 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
         subscriberSession.setType(RtmpSession.Type.subscriber);
 
         // 找到对应的 publish 端
-        var publisherChannel = RtmpMessageHandler.PUBLISHERS.get(streamKey);
+        var publisherChannel = publishers.get(streamKey);
         var publisherSession = getSession(publisherChannel);
 
         // onStatus 响应
@@ -210,7 +210,7 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
                 future -> {
                     if (future.isSuccess()) {
                         // 加入拉流端
-                        RtmpMessageHandler.SUBSCRIBERS.computeIfAbsent(streamKey, unused -> new DefaultChannelGroup(GlobalEventExecutor.INSTANCE))
+                        subscribers.computeIfAbsent(streamKey, unused -> new DefaultChannelGroup(GlobalEventExecutor.INSTANCE))
                                 .add(ctx.channel());
                     } else {
                         log.error("keyframe write failed: " + future.cause().getMessage(), future.cause());

@@ -45,4 +45,8 @@ public class RtmpSession {
     public String streamKey() {
         return String.format("%s/%s", app, streamName);
     }
+
+    public void release() {
+        this.keyFrame.release();
+    }
 }

@@ -1,7 +1,8 @@
-package com.jun.streamx.broker.handler.rtmp;
+package com.jun.streamx.broker.handler;
 
 import com.jun.streamx.broker.entity.RtmpMessage;
 import com.jun.streamx.broker.entity.RtmpSession;
+import com.jun.streamx.broker.handler.rtmp.MessageDispatchHandler;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -11,6 +12,7 @@ import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,7 +43,11 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
-        log.info("channel[{}] active", ctx.channel().id());
+        var socketAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+        var host = socketAddress.getAddress().getHostAddress();
+        var port = socketAddress.getPort();
+
+        log.info("[{}:{}] 连接激活", host, port);
     }
 
     @Override
@@ -58,7 +64,16 @@ public class RtmpMessageHandler extends SimpleChannelInboundHandler<RtmpMessage>
         if (session != null) {
             if (RtmpSession.Type.publisher == session.getType()) {
                 PUBLISHERS.remove(session.streamKey());
+
+                // 释放 session 里的 keyframe
+                session.release();
             }
+
+            var socketAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+            var host = socketAddress.getAddress().getHostAddress();
+            var port = socketAddress.getPort();
+
+            log.info("{}[{}:{}] 连接关闭", session.getType(), host, port);
         }
     }
 

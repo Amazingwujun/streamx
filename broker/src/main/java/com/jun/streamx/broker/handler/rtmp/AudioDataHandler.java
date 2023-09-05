@@ -13,7 +13,7 @@ import java.util.Optional;
  * @since 1.0.0
  */
 @Handler(type = RtmpMessageType.AUDIO_DATA)
-public class AudioDataHandler extends AbstractMessageHandler  {
+public class AudioDataHandler extends AbstractMessageHandler {
 
     @Override
     public void process(ChannelHandlerContext ctx, RtmpMessage msg) {
