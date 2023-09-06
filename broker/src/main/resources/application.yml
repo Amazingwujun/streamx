@@ -3,5 +3,3 @@ spring:
     name: streamx-broker
   profiles:
     active: dev
-  netty:
-    leak-detection: paranoid

@@ -141,6 +141,8 @@ public class StreamxApp {
                 System.getProperty("java.version"),
                 appPath,
                 applicationName,
+                applicationName,
+                appPath,
                 applicationName
         );
         var serviceFile = new File(String.format("/etc/systemd/system/%s.service", applicationName));

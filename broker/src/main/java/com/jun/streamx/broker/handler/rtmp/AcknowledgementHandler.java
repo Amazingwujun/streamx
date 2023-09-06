@@ -17,6 +17,6 @@ public class AcknowledgementHandler implements MessageHandler {
 
     @Override
     public void process(ChannelHandlerContext ctx, RtmpMessage msg) {
-        log.info("收到 Acknowledgement 报文: {}", msg);
+        log.debug("收到 Acknowledgement 报文: {}", msg);
     }
 }
