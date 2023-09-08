@@ -1,8 +1,8 @@
 package com.jun.streamx.broker.handler;
 
 import com.jun.streamx.broker.config.BizProperties;
-import com.jun.streamx.broker.net.ServerProperties;
-import com.jun.streamx.broker.net.TcpServer;
+import com.jun.streamx.net.ServerProperties;
+import com.jun.streamx.net.TcpServer;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;

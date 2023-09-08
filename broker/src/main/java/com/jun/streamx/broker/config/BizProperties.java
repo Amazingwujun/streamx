@@ -20,6 +20,4 @@ public class BizProperties {
 
     /** websocket path */
     private String webSocketPath = "/live";
-
-    private int rtmpPort = 1935;
 }
