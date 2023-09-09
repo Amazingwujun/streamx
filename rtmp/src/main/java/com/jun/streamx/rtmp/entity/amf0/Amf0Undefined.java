@@ -1,0 +1,28 @@
+package com.jun.streamx.rtmp.entity.amf0;
+
+import com.jun.streamx.rtmp.constants.Amf0Marker;
+import io.netty.buffer.ByteBuf;
+
+/**
+ * {@link Amf0Marker#UNDEFINED}
+ *
+ * @author Jun
+ * @since 1.0.0
+ */
+public class Amf0Undefined extends Amf0CastFormat {
+
+    @Override
+    public Amf0Marker marker() {
+        return Amf0Marker.UNDEFINED;
+    }
+
+    @Override
+    public void write(ByteBuf buf) {
+        buf.writeByte(marker().val);
+    }
+
+    @Override
+    public Amf0Format read(ByteBuf src) {
+        return this;
+    }
+}

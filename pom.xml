@@ -18,6 +18,8 @@
     <modules>
         <module>commons</module>
         <module>broker</module>
+        <module>rtmp</module>
+        <module>net</module>
     </modules>
 
     <properties>
@@ -32,6 +34,24 @@
             <dependency>
                 <groupId>com.jun.streamx</groupId>
                 <artifactId>commons</artifactId>
+                <version>${streamx.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.jun.streamx</groupId>
+                <artifactId>net</artifactId>
+                <version>${streamx.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.jun.streamx</groupId>
+                <artifactId>rtmp</artifactId>
+                <version>${streamx.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.jun.streamx</groupId>
+                <artifactId>broker</artifactId>
                 <version>${streamx.version}</version>
             </dependency>
 
