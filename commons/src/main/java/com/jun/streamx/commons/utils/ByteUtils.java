@@ -14,7 +14,7 @@ public class ByteUtils {
             '0', '1', '2', '3',
             '4', '5', '6', '7',
             '8', '9', 'a', 'b',
-            'e', 'd', 'e', 'f'
+            'c', 'd', 'e', 'f'
     };
 
     /**
@@ -234,10 +234,6 @@ public class ByteUtils {
         crc[0] = (byte) (CRC & 0xff);
         crc[1] = (byte) ((CRC >> 8) & 0xff);
         return crc;
-    }
-
-    public static void main(String[] args) {
-        System.out.println(toHexString(" ", "nani".getBytes()));
     }
 
     /**
