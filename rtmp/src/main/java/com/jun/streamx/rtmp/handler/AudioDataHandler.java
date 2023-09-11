@@ -19,6 +19,11 @@ public class AudioDataHandler extends AbstractMessageHandler {
     public void process(ChannelHandlerContext ctx, RtmpMessage msg) {
         var streamKey = getSession(ctx).streamKey();
         Optional.ofNullable(subscribers.get(streamKey))
-                .ifPresent(channels -> channels.forEach(channel -> channel.writeAndFlush(msg.retain())));
+                .ifPresent(channels -> channels.forEach(channel -> {
+                    if (getSession(channel).isPause()) {
+                        return;
+                    }
+                    channel.writeAndFlush(msg.retain());
+                }));
     }
 }

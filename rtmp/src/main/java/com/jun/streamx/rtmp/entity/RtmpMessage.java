@@ -5,6 +5,7 @@ import com.jun.streamx.rtmp.entity.amf0.Amf0Format;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.ByteBufUtil;
+import io.netty.buffer.Unpooled;
 
 import java.util.List;
 
@@ -18,6 +19,7 @@ public class RtmpMessage implements ByteBufHolder {
     //@formatter:off
 
     private final RtmpMessageType messageType;
+    /** 由于需要对 payload 进行写入操作，payloadLength 数据不一定正确 */
     private final int payloadLength;
     private final long timestamp;
     private final int streamId;
@@ -25,6 +27,10 @@ public class RtmpMessage implements ByteBufHolder {
     private final ByteBuf payload;
 
     //@formatter:on
+
+    public RtmpMessage(RtmpMessageType messageType) {
+        this(messageType, 0,0, Unpooled.buffer());
+    }
 
     public RtmpMessage(RtmpMessageType messageType,
                        long timestamp,
@@ -47,10 +53,6 @@ public class RtmpMessage implements ByteBufHolder {
 
     public RtmpMessageType messageType() {
         return messageType;
-    }
-
-    public int payloadLength() {
-        return payloadLength;
     }
 
     public long timestamp() {

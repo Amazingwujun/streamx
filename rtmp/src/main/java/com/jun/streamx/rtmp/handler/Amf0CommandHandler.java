@@ -1,6 +1,7 @@
 package com.jun.streamx.rtmp.handler;
 
 import com.jun.streamx.rtmp.constants.RtmpMessageType;
+import com.jun.streamx.rtmp.constants.UserControlMessageEvent;
 import com.jun.streamx.rtmp.entity.RtmpMessage;
 import com.jun.streamx.rtmp.entity.RtmpSession;
 import com.jun.streamx.rtmp.entity.amf0.*;
@@ -50,7 +51,7 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
             case "receiveVideo" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "publish" -> onPublish(ctx, list);
             case "seek" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
-            case "pause" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
+            case "pause" -> onPause(ctx, list);
             // 抓包发现的 command
             case "FCPublish" -> onFCPublish(ctx, list);
         }
@@ -155,15 +156,11 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
         subscriberSession.setType(RtmpSession.Type.subscriber);
 
         // onStatus 响应
-        var info = new Amf0Object();
-        info.put("level", Amf0String.STATUS);
-        info.put("code", new Amf0String("NetStream.Play.Start"));
-        info.put("description", new Amf0String("Start publishing"));
         var amf0FormatList = List.of(
                 Amf0String.ON_STATUS,
                 Amf0Number.ZERO,
                 Amf0Null.INSTANCE,
-                info
+                buildStatus("NetStream.Play.Start", "Start publishing")
         );
         var buf = Unpooled.buffer();
         amf0FormatList.forEach(t -> t.write(buf));
@@ -246,36 +243,126 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
         );
 
         // 返回 onStatus 响应
-        var info = new Amf0Object();
-        info.put("level", Amf0String.STATUS);
-        info.put("code", new Amf0String("NetStream.Play.Start"));
-        info.put("description", new Amf0String("Start publishing"));
         var buf = Unpooled.buffer();
         List.of(
                 Amf0String.ON_STATUS,
                 Amf0Number.ZERO,
                 Amf0Null.INSTANCE,
-                info
+                buildStatus("NetStream.Play.Start", "Start publishing")
         ).forEach(t -> t.write(buf));
         var onStatus = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
         ctx.writeAndFlush(onStatus);
     }
 
     private void onFCPublish(ChannelHandlerContext ctx, List<Amf0Format> list) {
-        var info = new Amf0Object();
-        info.put("level", Amf0String.STATUS);
-        info.put("code", new Amf0String("NetStream.Play.Start"));
-        info.put("description", new Amf0String("Start publishing"));
         var buf = Unpooled.buffer();
         List.of(
                 Amf0String.ON_FC_PUBLISH,
                 Amf0Number.ZERO,
                 Amf0Null.INSTANCE,
-                info
+                buildStatus("NetStream.Play.Start", "Start publishing")
         ).forEach(t -> t.write(buf));
         var rm = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
 
         ctx.writeAndFlush(rm);
+    }
+
+    private void onPause(ChannelHandlerContext ctx, List<Amf0Format> list) {
+        //The client sends the pause command to tell the server to pause or start playing.
+
+        // Pause/Unpause flag
+        var flag = list.get(3).cast(Amf0Boolean.class).isValue();
+
+        // pause or unpause 逻辑
+        if (flag) {
+            // pause
+            getSession(ctx).setPause(true);
+
+            // onStatus 响应
+            var amf0FormatList = List.of(
+                    Amf0String.ON_STATUS,
+                    Amf0Number.ZERO,
+                    Amf0Null.INSTANCE,
+                    buildStatus("NetStream.Pause.Notify", "Paused live")
+            );
+            var buf = Unpooled.buffer();
+            amf0FormatList.forEach(t -> t.write(buf));
+            var onStatus = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
+            amf0FormatList.forEach(t -> t.write(buf));
+            ctx.write(onStatus);
+
+            // Stream EOF
+            // The server sends this event to notify the client that the playback of data is over as requested on this
+            // stream. No more data is sent without issuing additional commands. The client discards the messages
+            // received for the stream. The 4 bytes of event data represent the ID of the stream on which playback
+            // has ended.
+            var streamEOF = new RtmpMessage(RtmpMessageType.USER_CONTROL_MESSAGE);
+            streamEOF.payload().writeShort(UserControlMessageEvent.STREAM_EOF.val)
+                    .writeInt(1); // 这里的 stream id 在业务上的用途我还没弄明白
+            ctx.writeAndFlush(streamEOF);
+        } else {
+            // unpause
+            // onStatus 响应
+            var amf0FormatList = List.of(
+                    Amf0String.ON_STATUS,
+                    Amf0Number.ZERO,
+                    Amf0Null.INSTANCE,
+                    buildStatus("NetStream.Unpause.Notify", "Unpaused live")
+            );
+            var buf = Unpooled.buffer();
+            amf0FormatList.forEach(t -> t.write(buf));
+            var onStatus = new RtmpMessage(RtmpMessageType.AMF0_COMMAND, 0, 0, buf);
+            ctx.write(onStatus);
+
+            // Stream Begin
+            // The server sends this event to notify the client that the playback of data is over as requested on this
+            // stream. No more data is sent without issuing additional commands. The client discards the messages
+            // received for the stream. The 4 bytes of event data represent the ID of the stream on which playback
+            // has ended.
+            var streamBegin = new RtmpMessage(RtmpMessageType.USER_CONTROL_MESSAGE);
+            streamBegin.payload().writeShort(UserControlMessageEvent.STREAM_BEGIN.val)
+                    .writeInt(1); // 这里的 stream id 在业务上的用途我还没弄明白
+            ctx.writeAndFlush(streamBegin);
+
+            // key frame 写入
+            var session = getSession(ctx);
+            var publisherChannel = publishers.get(session.streamKey());
+            if (publisherChannel == null) {
+                log.warn("Stream {} linked publisher channel is null", session.streamKey());
+                ctx.close();
+                return;
+            }
+            var publisherSession = getSession(publisherChannel);
+            publisherSession.thenAccept(state -> {
+                if (state != RtmpSession.State.complete) {
+                    log.warn("publisher state is {}", state);
+                    return;
+                }
+
+                var keyFrame = publisherSession.getKeyFrame();
+                var video = new RtmpMessage(
+                        RtmpMessageType.VIDEO_DATA,
+                        0,
+                        keyFrame.streamId(),
+                        keyFrame.payload().copy()
+                );
+                ctx.writeAndFlush(video).addListener(
+                        future -> {
+                            if (future.isSuccess()) {
+                                // 加入拉流端
+                                session.setPause(false);
+                            } else {
+                                log.error("keyframe write failed: " + future.cause().getMessage(), future.cause());
+                                ctx.close();
+                            }
+                        }
+                );
+            }).exceptionally(throwable -> {
+                log.error("publisher session completeFailed: " + throwable.getMessage(), throwable);
+                return null;
+            });
+        }
+
     }
 
     private List<Amf0Format> buildConnectResult(Amf0Number tid) {
@@ -288,5 +375,13 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
         info.put("description", new Amf0String("Connection succeeded."));
         info.put("objectEncoding", Amf0Number.ZERO);
         return List.of(Amf0String._RESULT, tid, properties, info);
+    }
+
+    private Amf0Object buildStatus(String code, String desc) {
+        var info = new Amf0Object();
+        info.put("level", Amf0String.STATUS);
+        info.put("code", new Amf0String(code));
+        info.put("description", new Amf0String(desc));
+        return info;
     }
 }

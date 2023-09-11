@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * @since 1.0.0
  */
 @EnableConfigurationProperties(BizProperties.class)
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.jun.streamx")
 public class RtmpApplication {
 
     public static void main(String[] args) {

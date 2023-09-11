@@ -49,6 +49,15 @@ public class RtmpSession extends CompletableFuture<RtmpSession.State> {
 
     private Type type;
 
+    /**
+     * pause flag
+     * <ol>
+     *     <li>true: 暂停推流</li>
+     *     <li>false: 启动推流</li>
+     * </ol>
+     */
+    private volatile boolean pause;
+
     //@formatter:on
 
 

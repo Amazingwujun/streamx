@@ -29,7 +29,12 @@ public class VideoDataHandler extends AbstractMessageHandler {
             publishers.put(session.streamKey(), ctx.channel());
         } else {
             Optional.ofNullable(subscribers.get(streamKey))
-                    .ifPresent(channels -> channels.forEach(channel -> channel.writeAndFlush(msg.retain())));
+                    .ifPresent(channels -> channels.forEach(channel -> {
+                        if (getSession(channel).isPause()) {
+                            return;
+                        }
+                        channel.writeAndFlush(msg.retain());
+                    }));
         }
     }
 }

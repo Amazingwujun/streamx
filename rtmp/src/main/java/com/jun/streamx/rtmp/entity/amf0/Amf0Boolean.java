@@ -2,6 +2,7 @@ package com.jun.streamx.rtmp.entity.amf0;
 
 import com.jun.streamx.rtmp.constants.Amf0Marker;
 import io.netty.buffer.ByteBuf;
+import lombok.Data;
 
 /**
  * {@link Amf0Marker#BOOLEAN}
@@ -9,6 +10,7 @@ import io.netty.buffer.ByteBuf;
  * @author Jun
  * @since 1.0.0
  */
+@Data
 public class Amf0Boolean extends Amf0CastFormat {
 
     public static final Amf0Boolean FALSE = new Amf0Boolean(false);
