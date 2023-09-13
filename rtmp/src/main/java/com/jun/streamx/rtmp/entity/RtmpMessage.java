@@ -19,8 +19,6 @@ public class RtmpMessage implements ByteBufHolder {
     //@formatter:off
 
     private final RtmpMessageType messageType;
-    /** 由于需要对 payload 进行写入操作，payloadLength 数据不一定正确 */
-    private final int payloadLength;
     private final long timestamp;
     private final int streamId;
 
@@ -32,20 +30,12 @@ public class RtmpMessage implements ByteBufHolder {
         this(messageType, 0, 0, Unpooled.buffer());
     }
 
-    public RtmpMessage(RtmpMessageType messageType,
-                       long timestamp,
-                       int streamId,
-                       ByteBuf payload) {
-        this(messageType, payload.readableBytes(), timestamp, streamId, payload);
-    }
 
     public RtmpMessage(RtmpMessageType messageType,
-                       int payloadLength,
                        long timestamp,
                        int streamId,
                        ByteBuf payload) {
         this.messageType = messageType;
-        this.payloadLength = payloadLength;
         this.timestamp = timestamp;
         this.streamId = streamId;
         this.payload = payload;
@@ -246,7 +236,7 @@ public class RtmpMessage implements ByteBufHolder {
                 this.payload.resetReaderIndex();
                 return "RtmpMessage{" +
                         "messageType=" + messageType +
-                        ", payloadLength=" + payloadLength +
+                        ", payloadLength=" + payload.readableBytes() +
                         ", timestamp=" + timestamp +
                         ", streamId=" + streamId +
                         ", payload=" + amf0 +
@@ -255,7 +245,7 @@ public class RtmpMessage implements ByteBufHolder {
             default -> {
                 return "RtmpMessage{" +
                         "messageType=" + messageType +
-                        ", payloadLength=" + payloadLength +
+                        ", payloadLength=" + payload.readableBytes() +
                         ", timestamp=" + timestamp +
                         ", streamId=" + streamId +
                         ", payload=" + payload +
