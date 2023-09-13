@@ -1,7 +1,7 @@
 package com.jun.streamx.rtmp.codec;
 
-import com.jun.streamx.rtmp.constants.RtmpMessageType;
 import com.jun.streamx.commons.exception.StreamxException;
+import com.jun.streamx.rtmp.constants.RtmpMessageType;
 import com.jun.streamx.rtmp.entity.RtmpMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

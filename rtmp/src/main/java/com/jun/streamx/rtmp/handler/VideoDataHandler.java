@@ -3,6 +3,7 @@ package com.jun.streamx.rtmp.handler;
 import com.jun.streamx.rtmp.constants.RtmpMessageType;
 import com.jun.streamx.rtmp.entity.RtmpMessage;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
 
 import java.util.Optional;
 
@@ -30,10 +31,17 @@ public class VideoDataHandler extends AbstractMessageHandler {
         } else {
             Optional.ofNullable(subscribers.get(streamKey))
                     .ifPresent(channels -> channels.forEach(channel -> {
-                        if (getSession(channel).isPause()) {
-                            return;
+                        // channel 协议检查
+                        switch (protocol(channel)) {
+                            case rtmp -> {
+                                if (getSession(channel).isPause()) {
+                                    return;
+                                }
+                                channel.writeAndFlush(msg.retain());
+                            }
+                            case http, https -> channel.writeAndFlush(msg.toFlvAVTag());
+                            case ws, wss -> channel.writeAndFlush(new BinaryWebSocketFrame(msg.toFlvAVTag()));
                         }
-                        channel.writeAndFlush(msg.retain());
                     }));
         }
     }

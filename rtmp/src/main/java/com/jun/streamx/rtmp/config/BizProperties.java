@@ -16,4 +16,14 @@ public class BizProperties {
 
     /** rtmp server port */
     private int port = 1935;
+
+    private HttpFlv httpFlv = new HttpFlv();
+
+    @Data
+    public static class HttpFlv {
+
+        private String webSocketPath = "/live";
+
+        private int port = 1989;
+    }
 }

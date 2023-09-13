@@ -1,13 +1,16 @@
 package com.jun.streamx.rtmp.handler;
 
+import com.jun.streamx.commons.constants.Protocol;
 import com.jun.streamx.rtmp.constants.RtmpMessageType;
 import com.jun.streamx.rtmp.constants.UserControlMessageEvent;
 import com.jun.streamx.rtmp.entity.RtmpMessage;
 import com.jun.streamx.rtmp.entity.RtmpSession;
 import com.jun.streamx.rtmp.entity.amf0.*;
+import com.jun.streamx.rtmp.http.ProtocolDispatchHandler;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -106,6 +109,10 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
                 0, 0,
                 buf
         );
+
+        // protocol 配置
+        ctx.channel().attr(AttributeKey.valueOf(Protocol.key))
+                .set(Protocol.rtmp);
 
         ctx.writeAndFlush(_result);
     }

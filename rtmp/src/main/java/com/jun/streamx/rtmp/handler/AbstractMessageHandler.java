@@ -1,5 +1,6 @@
 package com.jun.streamx.rtmp.handler;
 
+import com.jun.streamx.commons.constants.Protocol;
 import com.jun.streamx.rtmp.entity.RtmpSession;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -35,5 +36,15 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     public RtmpSession getSession(Channel channel) {
         return (RtmpSession) channel.attr(AttributeKey.valueOf(RtmpSession.KEY)).get();
+    }
+
+    /**
+     * 获取当前 channel 的 protocol
+     *
+     * @param channel {@link Channel}
+     * @return ProtocolEnum
+     */
+    public Protocol protocol(Channel channel) {
+        return (Protocol) channel.attr(AttributeKey.valueOf(Protocol.key)).get();
     }
 }

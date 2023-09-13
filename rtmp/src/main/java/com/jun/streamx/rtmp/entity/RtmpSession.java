@@ -1,11 +1,16 @@
 package com.jun.streamx.rtmp.entity;
 
+import com.jun.streamx.commons.utils.ByteUtils;
 import com.jun.streamx.rtmp.entity.amf0.Amf0Format;
+import com.jun.streamx.rtmp.entity.amf0.Amf0String;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 import org.springframework.util.ObjectUtils;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -18,6 +23,8 @@ import java.util.concurrent.CompletableFuture;
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
 public class RtmpSession extends CompletableFuture<RtmpSession.State> {
+
+    private static final byte[] FLV_HEADER = new byte[]{0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09};
 
     public enum Type {
         publisher,
@@ -58,6 +65,8 @@ public class RtmpSession extends CompletableFuture<RtmpSession.State> {
      */
     private volatile boolean pause;
 
+    private ByteBuf flvHeaders;
+
     //@formatter:on
 
 
@@ -67,6 +76,7 @@ public class RtmpSession extends CompletableFuture<RtmpSession.State> {
 
     public void release() {
         this.keyFrame.release();
+        this.flvHeaders.release();
     }
 
     public void setKeyFrame(RtmpMessage keyFrame) {
@@ -74,6 +84,43 @@ public class RtmpSession extends CompletableFuture<RtmpSession.State> {
         if (isArgComplete()) {
             this.complete(State.complete);
         }
+
+        // flv headers 处理
+        if (flvHeaders != null) {
+            return;
+        }
+
+        // 组装 flvHeaders
+        flvHeaders = Unpooled.buffer()
+                .writeBytes(FLV_HEADER)
+                .writeInt(0); // pre tag size
+
+        // script tag data
+        var scriptData = Unpooled.buffer();
+        List.of(Amf0String.ON_META_DATA, metadata).forEach(t -> t.write(scriptData));
+        var scriptDataLen = scriptData.readableBytes();
+
+        // script tag header
+        flvHeaders
+                .writeByte(0x12) // tag type
+                .writeMedium(scriptDataLen) // data size
+                .writeMedium(0) // timestamp
+                .writeByte(0) // timestamp extended
+                .writeMedium(0); // stream id
+        flvHeaders.writeBytes(scriptData);
+        flvHeaders.writeInt(scriptDataLen + 11); // pre tag size
+        scriptData.release();
+
+        // key frame, first video frame
+        var keyFrameLen = keyFrame.payload().readableBytes();
+        flvHeaders
+                .writeByte(0x09)
+                .writeMedium(keyFrameLen)
+                .writeMedium(0)
+                .writeByte(0)
+                .writeMedium(0);
+        flvHeaders.writeBytes(keyFrame.payload().duplicate());
+        flvHeaders.writeInt(keyFrameLen + 11);
     }
 
     public void setMetadata(Amf0Format metadata) {

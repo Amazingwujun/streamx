@@ -29,7 +29,7 @@ public class RtmpMessage implements ByteBufHolder {
     //@formatter:on
 
     public RtmpMessage(RtmpMessageType messageType) {
-        this(messageType, 0,0, Unpooled.buffer());
+        this(messageType, 0, 0, Unpooled.buffer());
     }
 
     public RtmpMessage(RtmpMessageType messageType,
@@ -214,6 +214,28 @@ public class RtmpMessage implements ByteBufHolder {
         byte b1 = content().readByte();
         content().resetReaderIndex();
         return b1 == 0x17;
+    }
+
+    public ByteBuf toFlvAVTag() {
+        var buf = Unpooled.buffer();
+        switch (messageType) {
+            case VIDEO_DATA -> buf.writeByte(9);
+            case AUDIO_DATA -> buf.writeByte(8);
+            default -> throw new UnsupportedOperationException("不支持的类型: " + messageType);
+        }
+        buf.writeMedium(payload.readableBytes());
+        if (timestamp > 0xffffff) {
+            buf.writeMedium((int) (timestamp & 0xffffff));
+            buf.writeByte((int) ((timestamp & 0xffffffffL) >> 24));
+        } else {
+            buf.writeMedium((int) timestamp);
+            buf.writeByte(0);
+        }
+        buf.writeMedium(0);
+        buf.writeBytes(payload.duplicate());
+        buf.writeInt(11 + payload.readableBytes());
+
+        return buf;
     }
 
 
