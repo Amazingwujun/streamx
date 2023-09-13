@@ -38,7 +38,11 @@ public class MessageDispatchHandler {
             var annotation = messageHandler.getClass().getAnnotation(Handler.class);
             Optional.ofNullable(annotation)
                     .map(Handler::type)
-                    .ifPresent(rtmpMessageType -> handlerMap.put(rtmpMessageType, messageHandler));
+                    .ifPresent(rtmpMessageType -> {
+                        for (var type : rtmpMessageType) {
+                            handlerMap.put(type, messageHandler);
+                        }
+                    });
         });
     }
 

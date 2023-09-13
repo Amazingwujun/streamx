@@ -22,5 +22,5 @@ public @interface Handler {
     /**
      * handle 支持的消息类型
      */
-    RtmpMessageType type();
+    RtmpMessageType[] type() default {};
 }

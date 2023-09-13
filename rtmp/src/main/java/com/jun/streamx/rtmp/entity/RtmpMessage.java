@@ -207,12 +207,10 @@ public class RtmpMessage implements ByteBufHolder {
      */
     public boolean isKeyFrame() {
         if (RtmpMessageType.VIDEO_DATA != messageType) {
-            throw new UnsupportedOperationException("不支持 " + messageType + " 类型进行 key frame 判断");
+            return false;
         }
 
-        content().markReaderIndex();
-        byte b1 = content().readByte();
-        content().resetReaderIndex();
+        var b1 = content().getByte(content().readerIndex());
         return b1 == 0x17;
     }
 
