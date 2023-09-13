@@ -51,7 +51,6 @@ public class FlvDecoder extends ByteToMessageDecoder {
                     state = DecodeState.READ_SCRIPT_TAG_HEAD;
                 } else {
                     log.error("flv header check failed: [{}]", ByteUtils.toHexString(" ", flvHeaders));
-                    ctx.close();
                 }
             }
             case READ_SCRIPT_TAG_HEAD -> {
@@ -65,7 +64,6 @@ public class FlvDecoder extends ByteToMessageDecoder {
 
                 if (scriptTagHeader[4] != 0x12) {
                     log.error("check script tag failed");
-                    ctx.close();
                     return;
                 }
 
@@ -120,10 +118,11 @@ public class FlvDecoder extends ByteToMessageDecoder {
                     );
                 } else {
                     in.resetReaderIndex();
-                    var buffer = ctx.alloc().buffer(11 + tagLen + 4, 11 + tagLen + 4);
-                    in.readBytes(buffer);
+                    var buf = new byte[11 + tagLen + 4];
+                    in.readBytes(buf);
 
-//                    out.add(buffer);
+                    int t = ((buf[7] & 0xff) << 24) + ((buf[4] & 0xff) << 16) + ((buf[5] & 0xff) << 8) + buf[6];
+                    log.info("tag: {}:{}:{}", headBuf[0], t, Integer.toHexString(buf[11]));
                 }
             }
         }

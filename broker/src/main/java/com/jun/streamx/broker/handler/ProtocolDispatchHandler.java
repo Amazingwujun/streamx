@@ -1,7 +1,7 @@
 package com.jun.streamx.broker.handler;
 
 import com.jun.streamx.broker.config.BizProperties;
-import com.jun.streamx.broker.constants.ProtocolEnum;
+import com.jun.streamx.commons.constants.Protocol;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -28,7 +28,6 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 @Slf4j
 public class ProtocolDispatchHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
-    public static final String PROTOCOL = "protocol";
     public static final String STREAM_URL_KEY = "stream-url";
     private final HttpFlvHandler httpFlvHandler;
     private final WebSocketFlvHandler webSocketFlvHandler;
@@ -75,7 +74,7 @@ public class ProtocolDispatchHandler extends SimpleChannelInboundHandler<FullHtt
             }
 
             // 协议内容置入
-            ctx.channel().attr(AttributeKey.valueOf(PROTOCOL)).set(ProtocolEnum.ws);
+            ctx.channel().attr(AttributeKey.valueOf(Protocol.key)).set(Protocol.ws);
 
             // ctx 切换
             var p = ctx.pipeline();
@@ -94,7 +93,7 @@ public class ProtocolDispatchHandler extends SimpleChannelInboundHandler<FullHtt
             preCtx.fireChannelActive();
         } else {
             // 协议内容置入
-            ctx.channel().attr(AttributeKey.valueOf(PROTOCOL)).set(ProtocolEnum.http);
+            ctx.channel().attr(AttributeKey.valueOf(Protocol.key)).set(Protocol.http);
 
             var p = ctx.pipeline();
             p.remove(this);

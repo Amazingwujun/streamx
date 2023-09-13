@@ -16,7 +16,7 @@ class BrokerApplicationTests {
     @Test
     void flv() throws InterruptedException {
         var sp = new ServerProperties();
-        sp.setPort(1989);
+        sp.setPort(1997);
 
         new TcpServer(new ChannelInitializer<>() {
             @Override

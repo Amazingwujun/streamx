@@ -1,9 +1,9 @@
 package com.jun.streamx.broker.javacv;
 
 
-import com.jun.streamx.broker.constants.ProtocolEnum;
 import com.jun.streamx.broker.exception.GrabberOrRecorderBuildException;
 import com.jun.streamx.broker.handler.ProtocolDispatchHandler;
+import com.jun.streamx.commons.constants.Protocol;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.group.ChannelGroup;
@@ -262,7 +262,7 @@ public class FrameGrabAndRecordManager implements Runnable {
      * @param channel {@link Channel}
      * @return ProtocolEnum
      */
-    private ProtocolEnum protocol(Channel channel) {
-        return (ProtocolEnum) channel.attr(AttributeKey.valueOf(ProtocolDispatchHandler.PROTOCOL)).get();
+    private Protocol protocol(Channel channel) {
+        return (Protocol) channel.attr(AttributeKey.valueOf(Protocol.key)).get();
     }
 }
