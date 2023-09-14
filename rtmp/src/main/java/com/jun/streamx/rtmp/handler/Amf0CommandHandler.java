@@ -6,7 +6,6 @@ import com.jun.streamx.rtmp.constants.UserControlMessageEvent;
 import com.jun.streamx.rtmp.entity.RtmpMessage;
 import com.jun.streamx.rtmp.entity.RtmpSession;
 import com.jun.streamx.rtmp.entity.amf0.*;
-import com.jun.streamx.rtmp.http.ProtocolDispatchHandler;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.group.DefaultChannelGroup;
@@ -48,7 +47,7 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
             // NetStream commands
             case "play" -> onPlay(ctx, list);
             case "play2" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
-            case "deleteStream" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
+            case "deleteStream" -> onDeleteStream(ctx, list);
             case "closeStream" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "receiveAudio" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
             case "receiveVideo" -> throw new UnsupportedOperationException("不支持的 cmd: " + commandName);
@@ -370,6 +369,15 @@ public class Amf0CommandHandler extends AbstractMessageHandler {
             });
         }
 
+    }
+
+    private void onDeleteStream(ChannelHandlerContext ctx, List<Amf0Format> list) {
+        // NetStream sends the deleteStream command when the NetStream object is
+        // getting destroyed.
+        //  The server does not send any response.
+        var session = getSession(ctx);
+        var streamId = list.get(3).cast(Amf0Number.class).getValue();
+        log.warn("NetStream[{}:{}] object is getting destroyed", session.streamKey(), streamId);
     }
 
     private List<Amf0Format> buildConnectResult(Amf0Number tid) {

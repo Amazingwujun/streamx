@@ -63,7 +63,7 @@ public class Amf0EcmaArray extends LinkedHashMap<String, Amf0Format> implements 
     }
 
     @Override
-    public <T> T cast(Class<T> clazz) {
+    public <T extends Amf0Format> T cast(Class<T> clazz) {
         return (T) this;
     }
 }

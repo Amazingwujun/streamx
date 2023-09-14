@@ -58,7 +58,7 @@ public class Amf0Object extends LinkedHashMap<String, Amf0Format> implements Amf
     }
 
     @Override
-    public <T> T cast(Class<T> clazz) {
+    public <T extends Amf0Format> T cast(Class<T> clazz) {
         return (T) this;
     }
 }

@@ -8,5 +8,5 @@ package com.jun.streamx.rtmp.entity.amf0;
  */
 public interface Cast {
 
-    <T> T cast(Class<T> clazz);
+    <T extends Amf0Format> T cast(Class<T> clazz);
 }

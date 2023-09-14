@@ -9,7 +9,7 @@ package com.jun.streamx.rtmp.entity.amf0;
 public abstract class Amf0CastFormat implements Amf0Format {
 
     @Override
-    public <T> T cast(Class<T> clazz) {
+    public <T extends Amf0Format> T cast(Class<T> clazz) {
         return (T) this;
     }
 }
