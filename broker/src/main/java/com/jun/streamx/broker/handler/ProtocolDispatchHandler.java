@@ -52,7 +52,8 @@ public class ProtocolDispatchHandler extends SimpleChannelInboundHandler<FullHtt
             sendError(ctx, "uri query string error");
             return;
         }
-        String streamUrl = query.split("=")[1];
+        var firstSplitIndex = query.indexOf("=");
+        String streamUrl = query.substring(firstSplitIndex + 1);
         if (!(streamUrl.startsWith("rtsp") || streamUrl.startsWith("rtmp"))) {
             var errMsg = String.format("非法的 stream url [%s], 仅支持 rtsp/rtmp", streamUrl);
             log.error(errMsg);
