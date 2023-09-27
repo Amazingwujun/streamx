@@ -2,9 +2,13 @@ package com.jun.streamx.rtmp.handler;
 
 import com.jun.streamx.rtmp.constants.RtmpMessageType;
 import com.jun.streamx.rtmp.entity.RtmpMessage;
+import com.jun.streamx.rtmp.entity.amf0.Amf0Format;
 import com.jun.streamx.rtmp.entity.amf0.Amf0String;
 import io.netty.channel.ChannelHandlerContext;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * {@link RtmpMessageType#AMF0_DATA}
@@ -34,7 +38,7 @@ public class Amf0DataHandler extends AbstractMessageHandler {
             if (amf0Format instanceof Amf0String s) {
                 if (Amf0String.ON_META_DATA.getValue().equals(s.getValue())) {
                     // 表明下一个 Amf0Object(nginx-rtmp-module) 或 Amf0EcmaArray(obs)
-                    var metadata = list.get(i + 1);
+                    var metadata = (LinkedHashMap<String, Amf0Format>)list.get(i + 1);
                     session.setMetadata(metadata);
                     break;
                 }

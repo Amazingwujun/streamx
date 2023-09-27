@@ -2,6 +2,7 @@ package com.jun.streamx.rtmp.entity;
 
 import com.jun.streamx.commons.utils.ByteUtils;
 import com.jun.streamx.rtmp.entity.amf0.Amf0Format;
+import com.jun.streamx.rtmp.entity.amf0.Amf0Object;
 import com.jun.streamx.rtmp.entity.amf0.Amf0String;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -10,7 +11,9 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 import org.springframework.util.ObjectUtils;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -123,8 +126,22 @@ public class RtmpSession extends CompletableFuture<RtmpSession.State> {
         flvHeaders.writeInt(keyFrameLen + 11);
     }
 
-    public void setMetadata(Amf0Format metadata) {
-        this.metadata = metadata;
+    public void setMetadata(LinkedHashMap<String, Amf0Format> metadata) {
+        // onMetaData 处理
+        var md = new Amf0Object();
+        md.put("server", new Amf0String("StreamX Rtmp(https://github.com/Amazingwujun/streamx)"));
+        Optional.of(metadata).map(t -> t.get("duration")).ifPresent(t -> md.put("duration", t));
+        Optional.of(metadata).map(t -> t.get("width")).ifPresent(t -> md.put("width", t));
+        Optional.of(metadata).map(t -> t.get("height")).ifPresent(t -> md.put("height", t));
+        Optional.of(metadata).map(t -> t.get("videodatarate")).ifPresent(t -> md.put("videodatarate", t));
+        Optional.of(metadata).map(t -> t.get("framerate")).ifPresent(t -> md.put("framerate", t));
+        Optional.of(metadata).map(t -> t.get("videocodecid")).ifPresent(t -> md.put("videocodecid", t));
+        Optional.of(metadata).map(t -> t.get("audiosamplerate")).ifPresent(t -> md.put("audiosamplerate", t));
+        Optional.of(metadata).map(t -> t.get("audiosamplesize")).ifPresent(t -> md.put("audiosamplesize", t));
+        Optional.of(metadata).map(t -> t.get("stereo")).ifPresent(t -> md.put("stereo", t));
+        Optional.of(metadata).map(t -> t.get("audiocodecid")).ifPresent(t -> md.put("audiocodecid", t));
+        Optional.of(metadata).map(t -> t.get("filesize")).ifPresent(t -> md.put("filesize", t));
+        this.metadata = md;
         if (isArgComplete()) {
             this.complete(State.complete);
         }
