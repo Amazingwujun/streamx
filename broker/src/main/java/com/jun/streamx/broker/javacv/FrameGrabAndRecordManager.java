@@ -94,6 +94,9 @@ public class FrameGrabAndRecordManager implements Runnable {
     }
 
     private void stopAndRelease() {
+        // 移除缓存
+        CACHE.remove(streamUrl);
+
         // 推流结束, 关闭全部客户端
         channelGroup.close();
 

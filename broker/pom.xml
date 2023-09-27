@@ -52,7 +52,7 @@
     </dependencies>
 
     <build>
-        <finalName>streamx-${name}-${streamx.version}</finalName>
+        <finalName>streamx-${project.name}-${streamx.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
